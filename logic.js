@@ -11,7 +11,7 @@ const Logic = (() => {
   // Candidates: open one-off tasks + routines whose time window is now and not done today.
   function candidates(data, now = new Date()) {
     const today = localDay(now), h = now.getHours() + now.getMinutes() / 60, wd = now.getDay();
-    const doneToday = new Set(data.log[today] || []);
+    const doneToday = doneSet(data, today);
     const late = h >= 22 || h < 4;
     const out = [];
     for (const t of data.tasks) {
@@ -44,13 +44,20 @@ const Logic = (() => {
     return candidates(data, now).find(c => !skipped.includes(c.id)) || null;
   }
 
+  // Habit log: log[day] = {routineId: ms}; positive = done, negative = un-marked (abs = when). Old array format = done.
+  const dayLog = (data, day) => { const v = data.log?.[day]; return Array.isArray(v) ? Object.fromEntries(v.map(id => [id, 1])) : (v || {}); };
+  const doneSet = (data, day) => new Set(Object.entries(dayLog(data, day)).filter(([, t]) => t > 0).map(([id]) => id));
+  function setRoutine(data, day, id, done, now = Date.now()) {
+    data.log[day] = { ...dayLog(data, day), [id]: done ? +now : -now };
+  }
+
   function markDone(data, c, now = new Date()) {
     if (c.kind === 'task') {
       const t = data.tasks.find(x => x.id === c.id);
       if (t) { t.done = true; t.doneAt = now.toISOString(); t.u = +now; }
     } else {
       const k = localDay(now);
-      (data.log[k] = data.log[k] || []).includes(c.id) || data.log[k].push(c.id);
+      setRoutine(data, k, c.id, true, now);
     }
   }
 
@@ -78,12 +85,15 @@ const Logic = (() => {
       }
       out[c] = [...m.values()].filter(it => !(out.deleted[it.id] >= (it.u || 0)));
     }
-    out.log = { ...(remote.log || {}) };
-    for (const [d, ids] of Object.entries(local.log || {})) out.log[d] = [...new Set([...(out.log[d] || []), ...ids])];
+    out.log = {};
+    for (const src of [remote, local]) for (const d of Object.keys(src.log || {})) {
+      const day = (out.log[d] = out.log[d] || {});
+      for (const [id, t] of Object.entries(dayLog(src, d))) if (Math.abs(t) >= Math.abs(day[id] || 0)) day[id] = t;
+    }
     return out;
   }
 
   const id = () => Math.random().toString(36).slice(2, 10);
-  return { empty, candidates, pickNext, markDone, pruneShopping, localDay, id, touch, remove, merge, COLLECTIONS };
+  return { doneSet, setRoutine, empty, candidates, pickNext, markDone, pruneShopping, localDay, id, touch, remove, merge, COLLECTIONS };
 })();
 if (typeof module !== 'undefined') module.exports = Logic;

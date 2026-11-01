@@ -152,7 +152,7 @@ views.shop = () => {
 // ---------- Tasks & routines ----------
 views.tasks = () => {
   const open = data.tasks.filter(t => !t.done).sort((a, b) => (a.due || '9') < (b.due || '9') ? -1 : 1);
-  const today = new Set(data.log[Logic.localDay()] || []);
+  const today = Logic.doneSet(data, Logic.localDay());
   shell(`<h1>Справи</h1><ul class="list">${open.map(t => `<li data-act="toggleTask" data-v="${t.id}"><span class="box"></span>
       <div><b>${t.focus ? '★ ' : ''}${esc(t.title)}</b><small>${[t.due, t.minutes && t.minutes + ' хв'].filter(Boolean).join(' · ')}</small></div>
       <button class="x" data-act="delTask" data-v="${t.id}">✕</button></li>`).join('') || '<p class="muted">Немає справ</p>'}</ul>
@@ -161,7 +161,7 @@ views.tasks = () => {
       <div class="row"><input name="due" type="date"><input name="minutes" type="number" min="1" placeholder="хв"></div>
       <label><input name="focus" type="checkbox"> Фокус ★</label>
       <button class="primary">Додати</button></form>
-    <h1>Щоденні звички</h1><ul class="list">${data.routines.map(r => `<li class="${today.has(r.id) ? 'done' : ''}"><span class="box"></span>
+    <h1>Щоденні звички</h1><ul class="list">${data.routines.map(r => `<li class="${today.has(r.id) ? 'done' : ''}" data-act="toggleRoutine" data-v="${Logic.localDay()}|${r.id}"><span class="box"></span>
       <div><b>${esc(r.title)}</b><small>${r.minutes ? r.minutes + ' хв · ' : ''}${r.from ?? 0}:00–${r.to ?? 24}:00</small></div>
       <button class="x" data-act="delRoutine" data-v="${r.id}">✕</button></li>`).join('')}</ul>
     <form data-form="addRoutine" class="add">
@@ -178,20 +178,20 @@ views.cal = () => {
   const total = data.routines.length, n = new Date(y, m + 1, 0).getDate(), lead = (new Date(y, m, 1).getDay() + 6) % 7;
   const cells = Array(lead).fill('<div></div>');
   for (let d = 1; d <= n; d++) {
-    const k = key(d), done = (data.log[k] || []).filter(id => data.routines.some(r => r.id === id)).length;
+    const k = key(d), done = [...Logic.doneSet(data, k)].filter(id => data.routines.some(r => r.id === id)).length;
     const due = data.tasks.some(t => t.due === k && !t.done), pct = total ? done / total : 0;
     cells.push(`<button class="day ${k === today ? 'today' : ''} ${k === calSel ? 'sel' : ''}" data-act="calDay" data-v="${k}"
       style="--p:${pct}">${d}${due ? '<i></i>' : ''}</button>`);
   }
   const sel = calSel && (() => {
-    const ids = new Set(data.log[calSel] || []);
+    const ids = Logic.doneSet(data, calSel);
     const tasks = data.tasks.filter(t => t.due === calSel || (t.doneAt || '').startsWith(calSel));
-    return `<h3>${calSel}</h3><ul class="list">${data.routines.map(r => `<li class="${ids.has(r.id) ? 'done' : ''}"><span class="box"></span><div><b>${esc(r.title)}</b></div></li>`).join('')}
-      ${tasks.map(t => `<li class="${t.done ? 'done' : ''}"><span class="box"></span><div><b>${esc(t.title)}</b><small>справа</small></div></li>`).join('')}</ul>`;
+    return `<h3>${calSel}</h3><ul class="list">${data.routines.map(r => `<li class="${ids.has(r.id) ? 'done' : ''}" data-act="toggleRoutine" data-v="${calSel}|${r.id}"><span class="box"></span><div><b>${esc(r.title)}</b></div></li>`).join('')}
+      ${tasks.map(t => `<li class="${t.done ? 'done' : ''}" data-act="toggleTaskDone" data-v="${t.id}|${calSel}"><span class="box"></span><div><b>${esc(t.title)}</b><small>справа</small></div></li>`).join('')}</ul>`;
   })();
   shell(`<div class="row cal-head"><button data-act="calMove" data-v="-1">‹</button><h1>${MONTHS[m]} ${y}</h1><button data-act="calMove" data-v="1">›</button></div>
     <div class="cal">${['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Нд'].map(w => `<span>${w}</span>`).join('')}${cells.join('')}</div>
-    <p class="muted">Заливка дня = частка виконаних звичок, крапка = є справа з дедлайном.</p>${sel || ''}`);
+    <p class="muted">Заливка дня = частка виконаних звичок, крапка = справа з дедлайном. Натисни день, потім пункт, щоб відмітити.</p>${sel || ''}`);
 };
 
 // ---------- Chat ----------
@@ -238,6 +238,11 @@ const acts = {
   timerStop: async () => { data.timer = null; await save(); render(); },
   toggleShop: async v => { const i = data.shopping.find(x => x.id === v); i.done = !i.done; i.doneAt = new Date().toISOString(); Logic.touch(i); await save(); render(); },
   toggleTask: async v => { Logic.markDone(data, { kind: 'task', id: v }); await save(); render(); },
+  toggleRoutine: async v => { const [day, id] = v.split('|'); Logic.setRoutine(data, day, id, !Logic.doneSet(data, day).has(id)); await save(); render(); },
+  toggleTaskDone: async v => {
+    const [id, day] = v.split('|'), t = data.tasks.find(x => x.id === id); if (!t) return;
+    t.done = !t.done; t.doneAt = t.done ? (day === Logic.localDay() ? new Date().toISOString() : day + 'T12:00:00.000Z') : undefined; Logic.touch(t); await save(); render();
+  },
   delTask: async v => { Logic.remove(data, 'tasks', v); await save(); render(); },
   delRoutine: async v => { if (!confirm('Видалити звичку?')) return; Logic.remove(data, 'routines', v); await save(); render(); },
   export: async () => { await navigator.clipboard.writeText(JSON.stringify(data)); alert('Скопійовано'); },
