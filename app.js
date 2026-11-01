@@ -1,0 +1,184 @@
+// UI (Ukrainian). Single-user, local-first, encrypted vault (crypto.js).
+const $app = document.getElementById('app');
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const LOCK_AFTER_MS = 60e3;
+let data = null, tab = 'home', skipped = [], current = null, hiddenAt = 0, tick = null, wakeLock = null;
+
+const save = () => Vault.save(data);
+function render() { data ? views[tab]() : lockView(); }
+
+// ---------- Lock ----------
+function lockView(msg = '') {
+  const isNew = !Vault.exists();
+  $app.innerHTML = `<section class="lock">
+    <h1>${isNew ? 'Придумай PIN' : 'Введи PIN'}</h1>
+    <p class="muted">${isNew ? '4–6 цифр. Не такий, як код телефона.' : `Спроб: ${Vault.triesLeft()}`}</p>
+    <input id="pin" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="6" autocomplete="off">
+    ${isNew ? '<input id="pin2" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="6" placeholder="Ще раз" autocomplete="off">' : ''}
+    <button class="primary" data-act="unlock">${isNew ? 'Створити' : 'Відкрити'}</button>
+    <p class="err">${esc(msg)}</p></section>`;
+  document.getElementById('pin').focus();
+}
+async function unlock() {
+  const pin = document.getElementById('pin').value;
+  if (!/^\d{4,6}$/.test(pin)) return lockView('Потрібно 4–6 цифр');
+  if (!Vault.exists()) {
+    if (pin !== document.getElementById('pin2').value) return lockView('PIN не збігається');
+    data = Logic.empty(); await Vault.create(pin, data);
+  } else {
+    data = await Vault.open(pin);
+    if (!data) return lockView(Vault.exists() ? 'Невірний PIN' : 'Забагато спроб — дані стерто');
+  }
+  Logic.pruneShopping(data); tab = 'home'; render();
+}
+function lock() { data = null; current = null; Vault.lock(); clearInterval(tick); render(); }
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) hiddenAt = Date.now();
+  else if (data && Date.now() - hiddenAt > LOCK_AFTER_MS) lock();
+  else if (data) render();
+});
+
+// ---------- Layout ----------
+const TABS = [['home', 'Головна'], ['shop', 'Покупки'], ['tasks', 'Справи'], ['settings', '⚙︎']];
+const shell = body => {
+  $app.innerHTML = `<div class="page">${body}</div><nav>${TABS.map(([k, t]) =>
+    `<button data-act="tab" data-v="${k}" class="${k === tab ? 'on' : ''}">${t}</button>`).join('')}</nav>`;
+};
+
+// ---------- Home: "Що мені робити?" + focus timer ----------
+const fmt = ms => { const s = Math.max(0, Math.ceil(ms / 1e3)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
+const views = {};
+views.home = () => {
+  clearInterval(tick);
+  const t = data.timer;
+  if (t) {
+    shell(`<section class="timer"><p class="muted">Тільки це:</p><h2>${esc(t.title)}</h2>
+      <div class="clock" id="clock">${fmt(t.end - Date.now())}</div>
+      <button data-act="timerDone" class="primary">Готово</button>
+      <a class="btn" href="shortcuts://run-shortcut?name=FocusTimer&input=${t.minutes}">Таймер iPhone (офлайн)</a>
+      <button data-act="timerStop">Скасувати</button></section>`);
+    keepAwake(true);
+    tick = setInterval(() => {
+      const left = t.end - Date.now();
+      document.getElementById('clock').textContent = fmt(left);
+      if (left <= 0) { clearInterval(tick); ring(); finishTimer(); }
+    }, 500);
+    return;
+  }
+  keepAwake(false);
+  const c = current;
+  shell(`<section class="home">
+    <button class="big" data-act="next">Що мені робити?</button>
+    ${c ? `<div class="card"><h2>${esc(c.title)}</h2>
+      ${c.minutes ? `<p class="muted">${c.minutes} хв</p>` : ''}
+      <div class="row">
+        ${c.minutes ? `<button class="primary" data-act="start">Почати ${c.minutes} хв</button>` : ''}
+        <button data-act="done">Зроблено</button><button data-act="other">Інше</button>
+      </div></div>` : current === false ? '<p class="muted">Все зроблено. Відпочинь 🙂</p>' : ''}
+  </section>`);
+};
+function next() { current = Logic.pickNext(data, new Date(), skipped) || false; render(); }
+async function finishTimer() {
+  const t = data.timer; data.timer = null;
+  Logic.markDone(data, { kind: t.kind, id: t.id }); current = null; await save(); render();
+}
+function ring() {
+  try {
+    const a = new AudioContext(), o = a.createOscillator(), g = a.createGain();
+    o.connect(g); g.connect(a.destination); o.frequency.value = 880; g.gain.value = .2;
+    o.start(); o.stop(a.currentTime + 1.2);
+  } catch {}
+  navigator.vibrate?.([300, 150, 300]);
+}
+async function keepAwake(on) {
+  try {
+    if (on && !wakeLock && navigator.wakeLock) wakeLock = await navigator.wakeLock.request('screen');
+    if (!on && wakeLock) { await wakeLock.release(); wakeLock = null; }
+  } catch {}
+}
+
+// ---------- Shopping ----------
+views.shop = () => {
+  const stores = [...new Set(data.shopping.map(i => i.store))];
+  shell(`<h1>Покупки</h1>
+    ${stores.map(s => `<h3>${esc(s)}</h3><ul class="list">${data.shopping.filter(i => i.store === s).map(i =>
+      `<li class="${i.done ? 'done' : ''}" data-act="toggleShop" data-v="${i.id}"><span class="box"></span>
+       <div><b>${esc(i.text)}</b>${i.note ? `<small>${esc(i.note)}</small>` : ''}</div></li>`).join('')}</ul>`).join('')
+    || '<p class="muted">Список порожній</p>'}
+    <form data-form="addShop" class="add">
+      <input name="store" list="stores" placeholder="Магазин" required>
+      <datalist id="stores">${stores.map(s => `<option value="${esc(s)}">`).join('')}</datalist>
+      <input name="text" placeholder="Що купити" required>
+      <input name="note" placeholder="Розмір, модель, нотатка">
+      <button class="primary">Додати</button></form>`);
+};
+
+// ---------- Tasks & routines ----------
+views.tasks = () => {
+  const open = data.tasks.filter(t => !t.done).sort((a, b) => (a.due || '9') < (b.due || '9') ? -1 : 1);
+  const today = new Set(data.log[Logic.localDay()] || []);
+  shell(`<h1>Справи</h1><ul class="list">${open.map(t => `<li data-act="toggleTask" data-v="${t.id}"><span class="box"></span>
+      <div><b>${t.focus ? '★ ' : ''}${esc(t.title)}</b><small>${[t.due, t.minutes && t.minutes + ' хв'].filter(Boolean).join(' · ')}</small></div>
+      <button class="x" data-act="delTask" data-v="${t.id}">✕</button></li>`).join('') || '<p class="muted">Немає справ</p>'}</ul>
+    <form data-form="addTask" class="add">
+      <input name="title" placeholder="Нова справа" required>
+      <div class="row"><input name="due" type="date"><input name="minutes" type="number" min="1" placeholder="хв"></div>
+      <label><input name="focus" type="checkbox"> Фокус ★</label>
+      <button class="primary">Додати</button></form>
+    <h1>Щоденні звички</h1><ul class="list">${data.routines.map(r => `<li class="${today.has(r.id) ? 'done' : ''}"><span class="box"></span>
+      <div><b>${esc(r.title)}</b><small>${r.minutes ? r.minutes + ' хв · ' : ''}${r.from ?? 0}:00–${r.to ?? 24}:00</small></div>
+      <button class="x" data-act="delRoutine" data-v="${r.id}">✕</button></li>`).join('')}</ul>
+    <form data-form="addRoutine" class="add">
+      <input name="title" placeholder="Звичка" required>
+      <div class="row"><input name="from" type="number" min="0" max="23" placeholder="з (год)"><input name="to" type="number" min="1" max="24" placeholder="до (год)"><input name="minutes" type="number" min="1" placeholder="хв"></div>
+      <button class="primary">Додати</button></form>`);
+};
+
+// ---------- Settings: backup / import ----------
+views.settings = () => shell(`<h1>Налаштування</h1>
+  <button data-act="lock">Заблокувати</button>
+  <h3>Перенесення даних</h3><p class="muted">Експорт — незашифрований JSON. Не зберігай його в спільних місцях.</p>
+  <button data-act="export">Скопіювати експорт</button>
+  <textarea id="imp" rows="5" placeholder="Встав JSON для імпорту"></textarea>
+  <button data-act="import">Імпортувати (замінить усе)</button>
+  <h3>Небезпечно</h3><button class="danger" data-act="wipe">Стерти всі дані</button>`);
+
+// ---------- Events ----------
+const acts = {
+  unlock, lock, next,
+  tab: v => { tab = v; render(); },
+  other: () => { skipped.push(current.id); next(); },
+  done: async () => { Logic.markDone(data, current); current = null; await save(); next(); },
+  start: async () => { const c = current; data.timer = { kind: c.kind, id: c.id, title: c.title, minutes: c.minutes, end: Date.now() + c.minutes * 6e4 }; await save(); render(); },
+  timerDone: () => { clearInterval(tick); finishTimer(); },
+  timerStop: async () => { data.timer = null; await save(); render(); },
+  toggleShop: async v => { const i = data.shopping.find(x => x.id === v); i.done = !i.done; i.doneAt = new Date().toISOString(); await save(); render(); },
+  toggleTask: async v => { Logic.markDone(data, { kind: 'task', id: v }); await save(); render(); },
+  delTask: async v => { data.tasks = data.tasks.filter(t => t.id !== v); await save(); render(); },
+  delRoutine: async v => { if (!confirm('Видалити звичку?')) return; data.routines = data.routines.filter(r => r.id !== v); await save(); render(); },
+  export: async () => { await navigator.clipboard.writeText(JSON.stringify(data)); alert('Скопійовано'); },
+  import: async () => {
+    try { const d = JSON.parse(document.getElementById('imp').value); data = Object.assign(Logic.empty(), d); await save(); alert('Імпортовано'); render(); }
+    catch { alert('Невірний JSON'); }
+  },
+  wipe: () => { if (confirm('Стерти всі дані на цьому пристрої?')) { Vault.wipe(); lock(); } },
+};
+$app.addEventListener('click', e => {
+  const el = e.target.closest('[data-act]'); if (!el) return;
+  e.stopPropagation(); acts[el.dataset.act]?.(el.dataset.v);
+});
+$app.addEventListener('keydown', e => { if (e.key === 'Enter' && e.target.id?.startsWith('pin')) unlock(); });
+const num = v => v === '' ? undefined : +v;
+const forms = {
+  addShop: f => data.shopping.push({ id: Logic.id(), store: f.store.trim(), text: f.text.trim(), note: f.note.trim(), done: false }),
+  addTask: f => data.tasks.push({ id: Logic.id(), title: f.title.trim(), due: f.due || null, minutes: num(f.minutes), focus: !!f.focus, done: false }),
+  addRoutine: f => data.routines.push({ id: Logic.id(), title: f.title.trim(), from: num(f.from), to: num(f.to), minutes: num(f.minutes) }),
+};
+$app.addEventListener('submit', async e => {
+  e.preventDefault();
+  forms[e.target.dataset.form](Object.fromEntries(new FormData(e.target)));
+  await save(); render();
+});
+
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js');
+render();

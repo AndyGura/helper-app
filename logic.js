@@ -1,0 +1,65 @@
+// Pure, rule-based logic (zero AI tokens). Kept DOM-free so it can be tested in Node.
+const Logic = (() => {
+  const day = d => d.toISOString().slice(0, 10);
+  const localDay = (d = new Date()) => new Date(d.getTime() - d.getTimezoneOffset() * 6e4).toISOString().slice(0, 10);
+  const daysBetween = (a, b) => Math.round((Date.parse(b) - Date.parse(a)) / 864e5);
+
+  function empty() {
+    return { shopping: [], tasks: [], routines: [], log: {}, timer: null };
+  }
+
+  // Candidates: open one-off tasks + routines whose time window is now and not done today.
+  function candidates(data, now = new Date()) {
+    const today = localDay(now), h = now.getHours() + now.getMinutes() / 60, wd = now.getDay();
+    const doneToday = new Set(data.log[today] || []);
+    const late = h >= 22 || h < 4;
+    const out = [];
+    for (const t of data.tasks) {
+      if (t.done) continue;
+      let s = 10;
+      if (t.due) {
+        const d = daysBetween(today, t.due);
+        s = d < 0 ? 100 - d * 5 : d === 0 ? 80 : d <= 3 ? 50 - d * 5 : 15;
+      }
+      if (t.focus) s += 30;
+      out.push({ kind: 'task', id: t.id, title: t.title, minutes: t.minutes || 0, score: s, item: t });
+    }
+    for (const r of data.routines) {
+      if (doneToday.has(r.id) || (r.days && !r.days.includes(wd))) continue;
+      const from = r.from ?? 0, to = r.to ?? 24;
+      const inWin = from <= to ? h >= from && h < to : h >= from || h < to; // supports overnight windows
+      if (!inWin) continue;
+      const span = (to - from + 24) % 24 || 24, passed = (h - from + 24) % 24;
+      out.push({ kind: 'routine', id: r.id, title: r.title, minutes: r.minutes || 0, score: 60 + 30 * passed / span, item: r });
+    }
+    for (const c of out) {
+      if (late && c.minutes && c.minutes <= 15) c.score += 15;
+      if (late && c.minutes > 45) c.score -= 30;
+    }
+    return out.sort((a, b) => b.score - a.score);
+  }
+
+  // ONE next action; `skipped` = ids the user already declined this session.
+  function pickNext(data, now = new Date(), skipped = []) {
+    return candidates(data, now).find(c => !skipped.includes(c.id)) || null;
+  }
+
+  function markDone(data, c, now = new Date()) {
+    if (c.kind === 'task') {
+      const t = data.tasks.find(x => x.id === c.id);
+      if (t) { t.done = true; t.doneAt = now.toISOString(); }
+    } else {
+      const k = localDay(now);
+      (data.log[k] = data.log[k] || []).includes(c.id) || data.log[k].push(c.id);
+    }
+  }
+
+  // Bought items disappear a week after being checked off.
+  function pruneShopping(data, now = new Date()) {
+    data.shopping = data.shopping.filter(i => !i.done || now - Date.parse(i.doneAt) < 7 * 864e5);
+  }
+
+  const id = () => Math.random().toString(36).slice(2, 10);
+  return { empty, candidates, pickNext, markDone, pruneShopping, localDay, id };
+})();
+if (typeof module !== 'undefined') module.exports = Logic;
