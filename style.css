@@ -24,3 +24,6 @@ nav button{border:none;background:none;margin:0;color:var(--muted)}nav .on{color
 .done{opacity:.45}.done .box{background:var(--acc);border-color:var(--acc)}.done b{text-decoration:line-through}
 .x{width:auto;margin:0;padding:6px 10px;border:none;background:none;color:var(--muted)}
 .add{margin-top:12px}label{display:block;margin:6px 0}label input{width:auto;display:inline}
+.chat{display:flex;flex-direction:column;gap:8px}.msg{padding:10px 12px;border-radius:14px;max-width:85%;white-space:normal}
+.msg.user{align-self:flex-end;background:var(--acc);color:#1e1e24}.msg.assistant{align-self:flex-start;background:var(--card)}
+select{font:inherit;color:inherit;border-radius:12px;border:1px solid #3a3a46;background:var(--card);padding:12px 14px;width:100%;margin:6px 0}

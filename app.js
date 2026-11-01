@@ -2,14 +2,42 @@
 const $app = document.getElementById('app');
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const LOCK_AFTER_MS = 60e3;
-let data = null, tab = 'home', skipped = [], current = null, hiddenAt = 0, tick = null, wakeLock = null;
+let data = null, tab = 'home', skipped = [], current = null, hiddenAt = 0, tick = null, wakeLock = null, faceOk = false, busy = false;
+const CRED = 'helper.cred';
 
-const save = () => Vault.save(data);
+const save = async () => { data.updatedAt = Date.now(); await Vault.save(data); Sync.schedule(data); };
 function render() { data ? views[tab]() : lockView(); }
 
 // ---------- Lock ----------
+// ---------- Face ID (WebAuthn platform passkey, local gate before the PIN) ----------
+const rnd = n => crypto.getRandomValues(new Uint8Array(n));
+const toB64 = b => btoa(String.fromCharCode(...new Uint8Array(b)));
+const fromB64 = s => Uint8Array.from(atob(s), c => c.charCodeAt(0));
+async function faceEnable() {
+  try {
+    const c = await navigator.credentials.create({ publicKey: {
+      challenge: rnd(32), rp: { name: 'Helper', id: location.hostname },
+      user: { id: rnd(16), name: 'helper', displayName: 'Helper' },
+      pubKeyCredParams: [{ type: 'public-key', alg: -7 }, { type: 'public-key', alg: -257 }],
+      authenticatorSelection: { authenticatorAttachment: 'platform', userVerification: 'required', residentKey: 'preferred' }, timeout: 60000 } });
+    localStorage.setItem(CRED, toB64(c.rawId)); alert('Face ID увімкнено');
+  } catch (e) { alert('Не вдалося: ' + e.message); }
+  render();
+}
+async function faceCheck() {
+  try {
+    await navigator.credentials.get({ publicKey: { challenge: rnd(32), rpId: location.hostname, userVerification: 'required', timeout: 60000,
+      allowCredentials: [{ type: 'public-key', id: fromB64(localStorage.getItem(CRED)) }] } });
+    faceOk = true; lockView();
+  } catch { lockView('Face ID не пройдено'); }
+}
+
 function lockView(msg = '') {
   const isNew = !Vault.exists();
+  if (!isNew && localStorage.getItem(CRED) && !faceOk) {
+    $app.innerHTML = `<section class="lock"><h1>Helper</h1><button class="primary" data-act="faceCheck">Face ID</button><p class="err">${esc(msg)}</p></section>`;
+    return;
+  }
   $app.innerHTML = `<section class="lock">
     <h1>${isNew ? 'Придумай PIN' : 'Введи PIN'}</h1>
     <p class="muted">${isNew ? '4–6 цифр. Не такий, як код телефона.' : `Спроб: ${Vault.triesLeft()}`}</p>
@@ -30,8 +58,9 @@ async function unlock() {
     if (!data) return lockView(Vault.exists() ? 'Невірний PIN' : 'Забагато спроб — дані стерто');
   }
   Logic.pruneShopping(data); tab = 'home'; render();
+  try { if (await Sync.pull(data)) { await Vault.save(data); render(); } } catch {}
 }
-function lock() { data = null; current = null; Vault.lock(); clearInterval(tick); render(); }
+function lock() { data = null; faceOk = false; current = null; Vault.lock(); clearInterval(tick); render(); }
 document.addEventListener('visibilitychange', () => {
   if (document.hidden) hiddenAt = Date.now();
   else if (data && Date.now() - hiddenAt > LOCK_AFTER_MS) lock();
@@ -39,7 +68,7 @@ document.addEventListener('visibilitychange', () => {
 });
 
 // ---------- Layout ----------
-const TABS = [['home', 'Головна'], ['shop', 'Покупки'], ['tasks', 'Справи'], ['settings', '⚙︎']];
+const TABS = [['home', 'Головна'], ['chat', 'Чат'], ['shop', 'Покупки'], ['tasks', 'Справи'], ['settings', '⚙︎']];
 const shell = body => {
   $app.innerHTML = `<div class="page">${body}</div><nav>${TABS.map(([k, t]) =>
     `<button data-act="tab" data-v="${k}" class="${k === tab ? 'on' : ''}">${t}</button>`).join('')}</nav>`;
@@ -134,18 +163,44 @@ views.tasks = () => {
       <button class="primary">Додати</button></form>`);
 };
 
+// ---------- Chat ----------
+views.chat = () => {
+  const s = data.settings || {};
+  if (!s.apiKey) return shell('<h1>Чат</h1><p class="muted">Додай ключ Claude API в ⚙︎, щоб говорити з агентом.</p>');
+  const msgs = (data.chat || []).filter(m => typeof m.content === 'string' || m.content.some(b => b.type === 'text' || b.type === 'tool_use'));
+  shell(`<div class="chat">${msgs.map(m => `<div class="msg ${m.role}">${esc(Chat.display(m)).replace(/\n/g, '<br>')}</div>`).join('')}
+    ${busy ? '<div class="msg assistant muted">…</div>' : ''}</div>
+    <form data-form="chat" class="add"><textarea name="text" rows="2" placeholder="Напиши…" required></textarea>
+    <div class="row"><button class="primary" ${busy ? 'disabled' : ''}>Надіслати</button><button type="button" data-act="newChat">Новий чат</button></div></form>`);
+  window.scrollTo(0, document.body.scrollHeight);
+};
+
 // ---------- Settings: backup / import ----------
-views.settings = () => shell(`<h1>Налаштування</h1>
+views.settings = () => { const s = data.settings || {}; shell(`<h1>Налаштування</h1>
   <button data-act="lock">Заблокувати</button>
+  ${localStorage.getItem(CRED) ? '<button data-act="faceOff">Вимкнути Face ID</button>' : '<button data-act="faceEnable">Увімкнути Face ID</button>'}
+  <h3>Репозиторій з даними</h3>
+  <form data-form="settings">
+    <input name="ghRepo" placeholder="owner/repo" value="${esc(s.ghRepo)}">
+    <input name="ghToken" type="password" placeholder="GitHub токен (fine-grained, Contents: RW)" value="${esc(s.ghToken)}">
+    <h3>Чат</h3>
+    <input name="apiKey" type="password" placeholder="Claude API ключ" value="${esc(s.apiKey)}">
+    <select name="model">${[['claude-opus-5-5', 'Opus 5.5 (розумніший)'], ['claude-haiku-5-5', 'Haiku 5.5 (у ~40× дешевший)']].map(([v, t]) =>
+      `<option value="${v}" ${(s.model || 'claude-opus-5-5') === v ? 'selected' : ''}>${t}</option>`).join('')}</select>
+    <button class="primary">Зберегти</button></form>
+  <button data-act="syncNow">Синхронізувати зараз</button>
   <h3>Перенесення даних</h3><p class="muted">Експорт — незашифрований JSON. Не зберігай його в спільних місцях.</p>
   <button data-act="export">Скопіювати експорт</button>
   <textarea id="imp" rows="5" placeholder="Встав JSON для імпорту"></textarea>
   <button data-act="import">Імпортувати (замінить усе)</button>
-  <h3>Небезпечно</h3><button class="danger" data-act="wipe">Стерти всі дані</button>`);
+  <h3>Небезпечно</h3><button class="danger" data-act="wipe">Стерти всі дані</button>`); };
 
 // ---------- Events ----------
 const acts = {
-  unlock, lock, next,
+  unlock, lock, next, faceEnable, faceCheck,
+  faceOff: () => { localStorage.removeItem(CRED); render(); },
+  newChat: async () => { data.chat = []; Chat.resetContext(); await save(); render(); },
+  syncNow: async () => { try { await Sync.pull(data); await Sync.push(data); await Vault.save(data); alert('Синхронізовано'); } catch (e) { alert('Помилка: ' + e.message); } render(); },
   tab: v => { tab = v; render(); },
   other: () => { skipped.push(current.id); next(); },
   done: async () => { Logic.markDone(data, current); current = null; await save(); next(); },
@@ -172,10 +227,17 @@ const num = v => v === '' ? undefined : +v;
 const forms = {
   addShop: f => data.shopping.push({ id: Logic.id(), store: f.store.trim(), text: f.text.trim(), note: f.note.trim(), done: false }),
   addTask: f => data.tasks.push({ id: Logic.id(), title: f.title.trim(), due: f.due || null, minutes: num(f.minutes), focus: !!f.focus, done: false }),
+  settings: f => { data.settings = { ...data.settings, ...f }; Chat.resetContext(); },
   addRoutine: f => data.routines.push({ id: Logic.id(), title: f.title.trim(), from: num(f.from), to: num(f.to), minutes: num(f.minutes) }),
 };
 $app.addEventListener('submit', async e => {
   e.preventDefault();
+  if (e.target.dataset.form === 'chat') {
+    const text = new FormData(e.target).get('text').trim(); if (!text || busy) return;
+    busy = true; render();
+    try { await Chat.send(data, text); } catch (err) { alert('Помилка: ' + err.message); }
+    busy = false; await save(); render(); return;
+  }
   forms[e.target.dataset.form](Object.fromEntries(new FormData(e.target)));
   await save(); render();
 });
