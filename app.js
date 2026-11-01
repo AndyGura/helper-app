@@ -2,10 +2,15 @@
 const $app = document.getElementById('app');
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const LOCK_AFTER_MS = 60e3;
+let calMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1), calSel = null;
 let data = null, tab = 'home', skipped = [], current = null, hiddenAt = 0, tick = null, wakeLock = null, faceOk = false, busy = false;
 const CRED = 'helper.cred';
 
-const save = async () => { data.updatedAt = Date.now(); await Vault.save(data); Sync.schedule(data); };
+const save = async () => { await Vault.save(data); Sync.schedule(data, async () => { await Vault.save(data); render(); }); };
+async function syncNow(quiet = true) {
+  try { if (await Sync.sync(data)) { await Vault.save(data); render(); } if (!quiet) alert('Синхронізовано'); }
+  catch (e) { if (!quiet) alert('Помилка синхронізації: ' + e.message); }
+}
 function render() { data ? views[tab]() : lockView(); }
 
 // ---------- Lock ----------
@@ -58,17 +63,18 @@ async function unlock() {
     if (!data) return lockView(Vault.exists() ? 'Невірний PIN' : 'Забагато спроб — дані стерто');
   }
   Logic.pruneShopping(data); tab = 'home'; render();
-  try { if (await Sync.pull(data)) { await Vault.save(data); render(); } } catch {}
+  syncNow();
 }
 function lock() { data = null; faceOk = false; current = null; Vault.lock(); clearInterval(tick); render(); }
 document.addEventListener('visibilitychange', () => {
   if (document.hidden) hiddenAt = Date.now();
   else if (data && Date.now() - hiddenAt > LOCK_AFTER_MS) lock();
-  else if (data) render();
+  else if (data) { render(); syncNow(); }
 });
 
 // ---------- Layout ----------
-const TABS = [['home', 'Головна'], ['chat', 'Чат'], ['shop', 'Покупки'], ['tasks', 'Справи'], ['settings', '⚙︎']];
+// Chat tab hidden for now (API is billed separately); code kept in chat.js.
+const TABS = [['home', 'Головна'], ['cal', 'Календар'], ['shop', 'Покупки'], ['tasks', 'Справи'], ['settings', '⚙︎']];
 const shell = body => {
   $app.innerHTML = `<div class="page">${body}</div><nav>${TABS.map(([k, t]) =>
     `<button data-act="tab" data-v="${k}" class="${k === tab ? 'on' : ''}">${t}</button>`).join('')}</nav>`;
@@ -163,6 +169,30 @@ views.tasks = () => {
       <button class="primary">Додати</button></form>`);
 };
 
+// ---------- Calendar: habit marks + tasks by due date ----------
+const MONTHS = ['Січень', 'Лютий', 'Березень', 'Квітень', 'Травень', 'Червень', 'Липень', 'Серпень', 'Вересень', 'Жовтень', 'Листопад', 'Грудень'];
+views.cal = () => {
+  const y = calMonth.getFullYear(), m = calMonth.getMonth(), today = Logic.localDay();
+  const key = d => `${y}-${String(m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+  const total = data.routines.length, n = new Date(y, m + 1, 0).getDate(), lead = (new Date(y, m, 1).getDay() + 6) % 7;
+  const cells = Array(lead).fill('<div></div>');
+  for (let d = 1; d <= n; d++) {
+    const k = key(d), done = (data.log[k] || []).filter(id => data.routines.some(r => r.id === id)).length;
+    const due = data.tasks.some(t => t.due === k && !t.done), pct = total ? done / total : 0;
+    cells.push(`<button class="day ${k === today ? 'today' : ''} ${k === calSel ? 'sel' : ''}" data-act="calDay" data-v="${k}"
+      style="--p:${pct}">${d}${due ? '<i></i>' : ''}</button>`);
+  }
+  const sel = calSel && (() => {
+    const ids = new Set(data.log[calSel] || []);
+    const tasks = data.tasks.filter(t => t.due === calSel || (t.doneAt || '').startsWith(calSel));
+    return `<h3>${calSel}</h3><ul class="list">${data.routines.map(r => `<li class="${ids.has(r.id) ? 'done' : ''}"><span class="box"></span><div><b>${esc(r.title)}</b></div></li>`).join('')}
+      ${tasks.map(t => `<li class="${t.done ? 'done' : ''}"><span class="box"></span><div><b>${esc(t.title)}</b><small>справа</small></div></li>`).join('')}</ul>`;
+  })();
+  shell(`<div class="row cal-head"><button data-act="calMove" data-v="-1">‹</button><h1>${MONTHS[m]} ${y}</h1><button data-act="calMove" data-v="1">›</button></div>
+    <div class="cal">${['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Нд'].map(w => `<span>${w}</span>`).join('')}${cells.join('')}</div>
+    <p class="muted">Заливка дня = частка виконаних звичок, крапка = є справа з дедлайном.</p>${sel || ''}`);
+};
+
 // ---------- Chat ----------
 views.chat = () => {
   const s = data.settings || {};
@@ -183,10 +213,6 @@ views.settings = () => { const s = data.settings || {}; shell(`<h1>Налашт�
   <form data-form="settings">
     <input name="ghRepo" placeholder="owner/repo" value="${esc(s.ghRepo)}">
     <input name="ghToken" type="password" placeholder="GitHub токен (fine-grained, Contents: RW)" value="${esc(s.ghToken)}">
-    <h3>Чат</h3>
-    <input name="apiKey" type="password" placeholder="Claude API ключ" value="${esc(s.apiKey)}">
-    <select name="model">${[['claude-opus-5-5', 'Opus 5.5 (розумніший)'], ['claude-haiku-5-5', 'Haiku 5.5 (у ~40× дешевший)']].map(([v, t]) =>
-      `<option value="${v}" ${(s.model || 'claude-opus-5-5') === v ? 'selected' : ''}>${t}</option>`).join('')}</select>
     <button class="primary">Зберегти</button></form>
   <button data-act="syncNow">Синхронізувати зараз</button>
   <h3>Перенесення даних</h3><p class="muted">Експорт — незашифрований JSON. Не зберігай його в спільних місцях.</p>
@@ -200,20 +226,22 @@ const acts = {
   unlock, lock, next, faceEnable, faceCheck,
   faceOff: () => { localStorage.removeItem(CRED); render(); },
   newChat: async () => { data.chat = []; Chat.resetContext(); await save(); render(); },
-  syncNow: async () => { try { await Sync.pull(data); await Sync.push(data); await Vault.save(data); alert('Синхронізовано'); } catch (e) { alert('Помилка: ' + e.message); } render(); },
+  syncNow: () => syncNow(false),
+  calMove: v => { calMonth = new Date(calMonth.getFullYear(), calMonth.getMonth() + +v, 1); render(); },
+  calDay: v => { calSel = v; render(); },
   tab: v => { tab = v; render(); },
   other: () => { skipped.push(current.id); next(); },
   done: async () => { Logic.markDone(data, current); current = null; await save(); next(); },
   start: async () => { const c = current; data.timer = { kind: c.kind, id: c.id, title: c.title, minutes: c.minutes, end: Date.now() + c.minutes * 6e4 }; await save(); render(); },
   timerDone: () => { clearInterval(tick); finishTimer(); },
   timerStop: async () => { data.timer = null; await save(); render(); },
-  toggleShop: async v => { const i = data.shopping.find(x => x.id === v); i.done = !i.done; i.doneAt = new Date().toISOString(); await save(); render(); },
+  toggleShop: async v => { const i = data.shopping.find(x => x.id === v); i.done = !i.done; i.doneAt = new Date().toISOString(); Logic.touch(i); await save(); render(); },
   toggleTask: async v => { Logic.markDone(data, { kind: 'task', id: v }); await save(); render(); },
-  delTask: async v => { data.tasks = data.tasks.filter(t => t.id !== v); await save(); render(); },
-  delRoutine: async v => { if (!confirm('Видалити звичку?')) return; data.routines = data.routines.filter(r => r.id !== v); await save(); render(); },
+  delTask: async v => { Logic.remove(data, 'tasks', v); await save(); render(); },
+  delRoutine: async v => { if (!confirm('Видалити звичку?')) return; Logic.remove(data, 'routines', v); await save(); render(); },
   export: async () => { await navigator.clipboard.writeText(JSON.stringify(data)); alert('Скопійовано'); },
   import: async () => {
-    try { const d = JSON.parse(document.getElementById('imp').value); data = Object.assign(Logic.empty(), d); await save(); alert('Імпортовано'); render(); }
+    try { const d = JSON.parse(document.getElementById('imp').value); const keep = { settings: data.settings, chat: data.chat }; data = Object.assign(Logic.empty(), d, keep); Logic.COLLECTIONS.forEach(c => data[c].forEach(i => Logic.touch(i))); await save(); alert('Імпортовано'); render(); }
     catch { alert('Невірний JSON'); }
   },
   wipe: () => { if (confirm('Стерти всі дані на цьому пристрої?')) { Vault.wipe(); lock(); } },
@@ -225,10 +253,10 @@ $app.addEventListener('click', e => {
 $app.addEventListener('keydown', e => { if (e.key === 'Enter' && e.target.id?.startsWith('pin')) unlock(); });
 const num = v => v === '' ? undefined : +v;
 const forms = {
-  addShop: f => data.shopping.push({ id: Logic.id(), store: f.store.trim(), text: f.text.trim(), note: f.note.trim(), done: false }),
-  addTask: f => data.tasks.push({ id: Logic.id(), title: f.title.trim(), due: f.due || null, minutes: num(f.minutes), focus: !!f.focus, done: false }),
+  addShop: f => data.shopping.push({ u: Date.now(), id: Logic.id(), store: f.store.trim(), text: f.text.trim(), note: f.note.trim(), done: false }),
+  addTask: f => data.tasks.push({ u: Date.now(), id: Logic.id(), title: f.title.trim(), due: f.due || null, minutes: num(f.minutes), focus: !!f.focus, done: false }),
   settings: f => { data.settings = { ...data.settings, ...f }; Chat.resetContext(); },
-  addRoutine: f => data.routines.push({ id: Logic.id(), title: f.title.trim(), from: num(f.from), to: num(f.to), minutes: num(f.minutes) }),
+  addRoutine: f => data.routines.push({ u: Date.now(), id: Logic.id(), title: f.title.trim(), from: num(f.from), to: num(f.to), minutes: num(f.minutes) }),
 };
 $app.addEventListener('submit', async e => {
   e.preventDefault();

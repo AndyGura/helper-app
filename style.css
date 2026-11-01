@@ -9,7 +9,7 @@ input,textarea{text-align:left}
 .primary{background:var(--acc);color:#1e1e24;border:none;font-weight:600}.danger{color:var(--bad)}
 .row{display:flex;gap:8px}.row>*{flex:1}
 nav{position:fixed;bottom:0;left:0;right:0;display:flex;background:#16161b;padding:6px 6px calc(6px + env(safe-area-inset-bottom))}
-nav button{border:none;background:none;margin:0;color:var(--muted)}nav .on{color:var(--acc);font-weight:600}
+nav button{flex:1;min-width:0;padding:12px 2px;font-size:15px;border:none;background:none;margin:0;color:var(--muted)}nav .on{color:var(--acc);font-weight:600}
 .lock{max-width:320px;margin:20vh auto 0;padding:0 16px;text-align:center}
 .lock input{text-align:center;font-size:28px;letter-spacing:8px}
 .home{display:flex;flex-direction:column;align-items:center;padding-top:8vh}
@@ -27,3 +27,7 @@ nav button{border:none;background:none;margin:0;color:var(--muted)}nav .on{color
 .chat{display:flex;flex-direction:column;gap:8px}.msg{padding:10px 12px;border-radius:14px;max-width:85%;white-space:normal}
 .msg.user{align-self:flex-end;background:var(--acc);color:#1e1e24}.msg.assistant{align-self:flex-start;background:var(--card)}
 select{font:inherit;color:inherit;border-radius:12px;border:1px solid #3a3a46;background:var(--card);padding:12px 14px;width:100%;margin:6px 0}
+.cal-head{align-items:center}.cal-head button{flex:0 0 48px}.cal-head h1{text-align:center;margin:0}
+.cal{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;text-align:center}.cal span{color:var(--muted);font-size:13px}
+.day{position:relative;margin:0;padding:10px 0;border-radius:10px;background:linear-gradient(to top,#f2b84b88 calc(var(--p)*100%),var(--card) 0)}
+.day.today{border-color:var(--acc)}.day.sel{outline:2px solid var(--fg)}.day i{position:absolute;top:4px;right:5px;width:6px;height:6px;border-radius:50%;background:var(--bad)}

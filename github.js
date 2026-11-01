@@ -27,28 +27,30 @@ const GH = (() => {
   return { read, write, append };
 })();
 
-// Sync app data to <repo>/data/app.json. Settings, chat and timer stay on the device.
+// Sync app data to <repo>/data/app.json with an item-level merge (see Logic.merge),
+// so edits from the phone and from the Claude project never overwrite each other.
+// Settings, chat and timer stay on the device.
 const Sync = (() => {
   const PATH = 'data/app.json';
-  let timer = null, sha;
+  let timer = null;
   const cfg = d => d.settings?.ghToken && d.settings?.ghRepo ? { token: d.settings.ghToken, repo: d.settings.ghRepo } : null;
-  const shareable = ({ settings, chat, timer, ...rest }) => rest;
-  // Returns true if local data was replaced by newer remote data.
-  async function pull(d) {
+  const shareable = ({ settings, chat, timer, updatedAt, ...rest }) => rest;
+  // Pull, merge into d (in place), push back if the merge changed anything. Returns true if d changed.
+  async function sync(d, retry = true) {
     const c = cfg(d); if (!c) return false;
     const f = await GH.read(c, PATH);
-    if (!f) { await push(d); return false; }
-    sha = f.sha;
-    const remote = JSON.parse(f.text);
-    if ((remote.updatedAt || 0) > (d.updatedAt || 0)) { Object.assign(d, remote); return true; }
-    if ((remote.updatedAt || 0) < (d.updatedAt || 0)) await push(d);
-    return false;
+    const remote = f ? JSON.parse(f.text) : {};
+    const before = JSON.stringify(shareable(d));
+    const merged = Logic.merge(shareable(d), remote);
+    const after = JSON.stringify(merged);
+    Object.assign(d, merged);
+    const remoteNorm = JSON.stringify(shareable(Logic.merge(remote, remote)));
+    if (after !== remoteNorm) {
+      try { await GH.write(c, PATH, JSON.stringify(merged, null, 1), 'app: sync data', f?.sha || null); }
+      catch (e) { if (retry) return (await sync(d, false)) || before !== after; throw e; } // sha conflict: re-merge once
+    }
+    return before !== after;
   }
-  async function push(d) {
-    const c = cfg(d); if (!c) return;
-    try { sha = await GH.write(c, PATH, JSON.stringify(shareable(d), null, 1), 'app: sync data', sha); }
-    catch { sha = undefined; } // refetch sha next time
-  }
-  const schedule = d => { if (!cfg(d)) return; clearTimeout(timer); timer = setTimeout(() => push(d), 3000); };
-  return { pull, push, schedule, cfg };
+  const schedule = (d, onChange) => { if (!cfg(d)) return; clearTimeout(timer); timer = setTimeout(() => sync(d).then(ch => ch && onChange?.()).catch(() => {}), 3000); };
+  return { sync, schedule, cfg };
 })();

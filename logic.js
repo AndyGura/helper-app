@@ -5,7 +5,7 @@ const Logic = (() => {
   const daysBetween = (a, b) => Math.round((Date.parse(b) - Date.parse(a)) / 864e5);
 
   function empty() {
-    return { shopping: [], tasks: [], routines: [], log: {}, timer: null };
+    return { shopping: [], tasks: [], routines: [], log: {}, deleted: {}, timer: null };
   }
 
   // Candidates: open one-off tasks + routines whose time window is now and not done today.
@@ -47,7 +47,7 @@ const Logic = (() => {
   function markDone(data, c, now = new Date()) {
     if (c.kind === 'task') {
       const t = data.tasks.find(x => x.id === c.id);
-      if (t) { t.done = true; t.doneAt = now.toISOString(); }
+      if (t) { t.done = true; t.doneAt = now.toISOString(); t.u = +now; }
     } else {
       const k = localDay(now);
       (data.log[k] = data.log[k] || []).includes(c.id) || data.log[k].push(c.id);
@@ -56,10 +56,34 @@ const Logic = (() => {
 
   // Bought items disappear a week after being checked off.
   function pruneShopping(data, now = new Date()) {
-    data.shopping = data.shopping.filter(i => !i.done || now - Date.parse(i.doneAt) < 7 * 864e5);
+    for (const i of data.shopping) if (i.done && now - Date.parse(i.doneAt) >= 7 * 864e5) remove(data, 'shopping', i.id, now);
+  }
+
+  // ---- Sync merge: items carry `u` (ms of last change); deletions are tombstones in `deleted`. ----
+  const COLLECTIONS = ['shopping', 'tasks', 'routines'];
+  const touch = (item, now = Date.now()) => { item.u = +now; return item; };
+  function remove(data, coll, id, now = Date.now()) {
+    data[coll] = data[coll].filter(x => x.id !== id);
+    (data.deleted = data.deleted || {})[id] = +now;
+  }
+  function merge(local, remote, now = Date.now()) {
+    const out = { ...local, deleted: { ...(remote.deleted || {}) } };
+    for (const [id, t] of Object.entries(local.deleted || {})) out.deleted[id] = Math.max(t, out.deleted[id] || 0);
+    for (const [id, t] of Object.entries(out.deleted)) if (now - t > 60 * 864e5) delete out.deleted[id];
+    for (const c of COLLECTIONS) {
+      const m = new Map();
+      for (const it of [...(remote[c] || []), ...(local[c] || [])]) {
+        const prev = m.get(it.id);
+        if (!prev || (it.u || 0) >= (prev.u || 0)) m.set(it.id, it);
+      }
+      out[c] = [...m.values()].filter(it => !(out.deleted[it.id] >= (it.u || 0)));
+    }
+    out.log = { ...(remote.log || {}) };
+    for (const [d, ids] of Object.entries(local.log || {})) out.log[d] = [...new Set([...(out.log[d] || []), ...ids])];
+    return out;
   }
 
   const id = () => Math.random().toString(36).slice(2, 10);
-  return { empty, candidates, pickNext, markDone, pruneShopping, localDay, id };
+  return { empty, candidates, pickNext, markDone, pruneShopping, localDay, id, touch, remove, merge, COLLECTIONS };
 })();
 if (typeof module !== 'undefined') module.exports = Logic;
