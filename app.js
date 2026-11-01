@@ -68,7 +68,8 @@ async function unlock() {
 function lock() { data = null; faceOk = false; current = null; Vault.lock(); clearInterval(tick); render(); }
 document.addEventListener('visibilitychange', () => {
   if (document.hidden) hiddenAt = Date.now();
-  else if (data && Date.now() - hiddenAt > LOCK_AFTER_MS) lock();
+  // Reload instead of a plain lock: clears memory and picks up the latest app version.
+  else if (Date.now() - hiddenAt > LOCK_AFTER_MS) { data = null; Vault.lock(); location.reload(); }
   else if (data) { render(); syncNow(); }
 });
 
@@ -270,5 +271,5 @@ $app.addEventListener('submit', async e => {
   await save(); render();
 });
 
-if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js');
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then(r => r.update()).catch(() => {});
 render();
