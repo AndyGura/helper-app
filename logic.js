@@ -40,8 +40,18 @@ const Logic = (() => {
   }
 
   // ONE next action; `skipped` = ids the user already declined this session.
+  // At night (00:00–05:00) only quick things (≤5 min) that are due now count; otherwise: go to sleep.
+  const SLEEP = ['Йди спи, трудяга 😴', 'Йди спи, сова ти така 🦉', 'Йди спи, невгамовний 😄', 'Йди спи, вічний двигун ⚡',
+    'Йди спи, непосида 🙃', 'Йди спи, трудоголік ти мій 💤', 'Йди спи, шило ти невгамовне 😜'];
+  const isNight = now => now.getHours() < 5;
   function pickNext(data, now = new Date(), skipped = []) {
-    return candidates(data, now).find(c => !skipped.includes(c.id)) || null;
+    let list = candidates(data, now).filter(c => !skipped.includes(c.id));
+    if (isNight(now)) {
+      const today = localDay(now);
+      list = list.filter(c => c.minutes && c.minutes <= 5 && (c.kind === 'routine' || (c.item.due && c.item.due <= today)));
+      if (!list.length) return { kind: 'sleep', id: 'sleep', title: SLEEP[Math.floor(Math.random() * SLEEP.length)], minutes: 0 };
+    }
+    return list[0] || null;
   }
 
   // Habit log: log[day] = {routineId: ms}; positive = done, negative = un-marked (abs = when). Old array format = done.

@@ -105,7 +105,7 @@ views.home = () => {
   const c = current;
   shell(`<section class="home">
     <button class="big" data-act="next">Що мені робити?</button>
-    ${c ? `<div class="card"><h2>${esc(c.title)}</h2>
+    ${c && c.kind === 'sleep' ? `<div class="card"><h2>${esc(c.title)}</h2></div>` : c ? `<div class="card"><h2>${esc(c.title)}</h2>
       ${c.minutes ? `<p class="muted">${c.minutes} хв</p>` : ''}
       <div class="row">
         ${c.minutes ? `<button class="primary" data-act="start">Почати ${c.minutes} хв</button>` : ''}
