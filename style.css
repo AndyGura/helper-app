@@ -31,3 +31,4 @@ select{font:inherit;color:inherit;border-radius:12px;border:1px solid #3a3a46;ba
 .cal{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;text-align:center}.cal span{color:var(--muted);font-size:13px}
 .day{position:relative;margin:0;padding:10px 0;border-radius:10px;background:linear-gradient(to top,#f2b84b88 calc(var(--p)*100%),var(--card) 0)}
 .day.today{border-color:var(--acc)}.day.sel{outline:2px solid var(--fg)}.day i{position:absolute;top:4px;right:5px;width:6px;height:6px;border-radius:50%;background:var(--bad)}
+.quick{width:100%;margin-top:32px}.quick .row{align-items:center}

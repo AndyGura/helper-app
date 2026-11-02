@@ -111,12 +111,15 @@ views.home = () => {
         ${c.minutes ? `<button class="primary" data-act="start">Почати ${c.minutes} хв</button>` : ''}
         <button data-act="done">Зроблено</button><button data-act="other">Інше</button>
       </div></div>` : current === false ? '<p class="muted">Все зроблено. Відпочинь 🙂</p>' : ''}
+    <form data-form="timer" class="add quick"><h3>Фокус-таймер</h3>
+      <input name="title" placeholder="Що робиш (напр. домашні рутини)" required>
+      <div class="row"><input name="minutes" type="number" min="1" value="20"><button class="primary">Почати</button></div></form>
   </section>`);
 };
 function next() { current = Logic.pickNext(data, new Date(), skipped) || false; render(); }
 async function finishTimer() {
   const t = data.timer; data.timer = null;
-  Logic.markDone(data, { kind: t.kind, id: t.id }); current = null; await save(); render();
+  if (t.kind !== 'free') Logic.markDone(data, { kind: t.kind, id: t.id }); current = null; await save(); render();
 }
 function ring() {
   try {
@@ -266,6 +269,11 @@ const forms = {
 };
 $app.addEventListener('submit', async e => {
   e.preventDefault();
+  if (e.target.dataset.form === 'timer') {
+    const f = Object.fromEntries(new FormData(e.target)), m = Math.max(1, +f.minutes || 20);
+    data.timer = { kind: 'free', id: null, title: f.title.trim(), minutes: m, end: Date.now() + m * 6e4 };
+    await save(); render(); return;
+  }
   if (e.target.dataset.form === 'chat') {
     const text = new FormData(e.target).get('text').trim(); if (!text || busy) return;
     busy = true; render();
