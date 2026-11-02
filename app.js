@@ -82,28 +82,45 @@ const shell = body => {
 };
 
 // ---------- Home: "Що мені робити?" + focus timer ----------
-const fmt = ms => { const s = Math.max(0, Math.ceil(ms / 1e3)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
+const fmt = ms => { const s = Math.max(0, Math.ceil(ms / 1e3)), p = n => String(n).padStart(2, '0');
+  return s >= 3600 ? `${Math.floor(s / 3600)}:${p(Math.floor(s / 60) % 60)}:${p(s % 60)}` : `${Math.floor(s / 60)}:${p(s % 60)}`; };
 const views = {};
+// Timers: data.timers = [{id, title, kind, ref, dur (ms | null = stopwatch), acc (ms), run (ms | null)}].
+// Only one runs at a time; starting another pauses the running one.
+const elapsed = t => t.acc + (t.run ? Date.now() - t.run : 0);
+const shown = t => t.dur ? fmt(t.dur - elapsed(t)) : fmt(elapsed(t));
+function timers() {
+  if (data.timer) { const o = data.timer; data.timers = [{ id: Logic.id(), title: o.title, kind: o.kind, ref: o.id, dur: o.minutes * 6e4, acc: o.minutes * 6e4 - (o.end - Date.now()), run: Date.now() }]; data.timer = null; }
+  return (data.timers = data.timers || []);
+}
+async function startTimer(title, minutes, kind = 'free', ref = null) {
+  for (const t of timers()) if (t.run) { t.acc = elapsed(t); t.run = null; }
+  timers().push({ id: Logic.id(), title, kind, ref, dur: minutes ? minutes * 6e4 : null, acc: 0, run: Date.now() });
+  await save(); render();
+}
 views.home = () => {
   clearInterval(tick);
-  const t = data.timer;
+  const all = timers(), t = all.find(x => x.run), paused = all.filter(x => !x.run);
+  const pausedHtml = paused.length ? `<h3>На паузі</h3><ul class="list">${paused.map(p => `<li><div><b>${esc(p.title)}</b><small>${shown(p)}${p.dur ? ' залишилось' : ''}</small></div>
+    <button class="mini primary" data-act="timerResume" data-v="${p.id}">▶</button><button class="mini" data-act="timerDone" data-v="${p.id}">✓</button></li>`).join('')}</ul>` : '';
   if (t) {
     shell(`<section class="timer"><p class="muted">Тільки це:</p><h2>${esc(t.title)}</h2>
-      <div class="clock" id="clock">${fmt(t.end - Date.now())}</div>
-      <button data-act="timerDone" class="primary">Готово</button>
-      <a class="btn" href="shortcuts://run-shortcut?name=FocusTimer&input=${t.minutes}">Таймер iPhone (офлайн)</a>
-      <button data-act="timerStop">Скасувати</button></section>`);
+      <div class="clock" id="clock">${shown(t)}</div>
+      <div class="row"><button data-act="timerPause" data-v="${t.id}">Пауза</button><button data-act="timerDone" data-v="${t.id}" class="primary">Готово</button></div>
+      ${t.dur ? `<a class="btn" href="shortcuts://run-shortcut?name=FocusTimer&input=${Math.ceil((t.dur - elapsed(t)) / 6e4)}">Таймер iPhone (офлайн)</a>` : ''}
+      <button data-act="timerStop" data-v="${t.id}">Скасувати</button>${pausedHtml}</section>`);
     keepAwake(true);
     tick = setInterval(() => {
-      const left = t.end - Date.now();
-      document.getElementById('clock').textContent = fmt(left);
-      if (left <= 0) { clearInterval(tick); ring(); finishTimer(); }
+      const el = document.getElementById('clock'); if (!el) return clearInterval(tick);
+      el.textContent = shown(t);
+      if (t.dur && elapsed(t) >= t.dur) { clearInterval(tick); ring(); finishTimer(t.id); }
     }, 500);
     return;
   }
   keepAwake(false);
   const c = current;
   shell(`<section class="home">
+    ${pausedHtml ? `<div class="paused">${pausedHtml}</div>` : ''}
     <button class="big" data-act="next">Що мені робити?</button>
     ${c && c.kind === 'sleep' ? `<div class="card"><h2>${esc(c.title)}</h2></div>` : c ? `<div class="card"><h2>${esc(c.title)}</h2>
       ${c.minutes ? `<p class="muted">${c.minutes} хв</p>` : ''}
@@ -111,15 +128,17 @@ views.home = () => {
         ${c.minutes ? `<button class="primary" data-act="start">Почати ${c.minutes} хв</button>` : ''}
         <button data-act="done">Зроблено</button><button data-act="other">Інше</button>
       </div></div>` : current === false ? '<p class="muted">Все зроблено. Відпочинь 🙂</p>' : ''}
-    <form data-form="timer" class="add quick"><h3>Фокус-таймер</h3>
-      <input name="title" placeholder="Що робиш (напр. домашні рутини)" required>
-      <div class="row"><input name="minutes" type="number" min="1" value="20"><button class="primary">Почати</button></div></form>
+    <form data-form="timer" class="add quick"><h3>Таймер</h3>
+      <input name="title" placeholder="Що робиш (напр. робота, домашні рутини)" required>
+      <div class="row"><input name="minutes" type="number" min="1" placeholder="хв (порожньо = секундомір)"><button class="primary">Почати</button></div></form>
   </section>`);
 };
 function next() { current = Logic.pickNext(data, new Date(), skipped) || false; render(); }
-async function finishTimer() {
-  const t = data.timer; data.timer = null;
-  if (t.kind !== 'free') Logic.markDone(data, { kind: t.kind, id: t.id }); current = null; await save(); render();
+async function finishTimer(id) {
+  const t = timers().find(x => x.id === id); if (!t) return;
+  data.timers = timers().filter(x => x.id !== id);
+  if (t.kind !== 'free') Logic.markDone(data, { kind: t.kind, id: t.ref });
+  current = null; await save(); render();
 }
 function ring() {
   try {
@@ -236,9 +255,11 @@ const acts = {
   tab: v => { tab = v; render(); },
   other: () => { skipped.push(current.id); next(); },
   done: async () => { Logic.markDone(data, current); current = null; await save(); next(); },
-  start: async () => { const c = current; data.timer = { kind: c.kind, id: c.id, title: c.title, minutes: c.minutes, end: Date.now() + c.minutes * 6e4 }; await save(); render(); },
-  timerDone: () => { clearInterval(tick); finishTimer(); },
-  timerStop: async () => { data.timer = null; await save(); render(); },
+  start: () => { const c = current; startTimer(c.title, c.minutes, c.kind, c.id); },
+  timerDone: v => { clearInterval(tick); finishTimer(v); },
+  timerStop: async v => { data.timers = timers().filter(x => x.id !== v); await save(); render(); },
+  timerPause: async v => { const t = timers().find(x => x.id === v); t.acc = elapsed(t); t.run = null; await save(); render(); },
+  timerResume: async v => { for (const t of timers()) if (t.run) { t.acc = elapsed(t); t.run = null; } timers().find(x => x.id === v).run = Date.now(); await save(); render(); },
   toggleShop: async v => { const i = data.shopping.find(x => x.id === v); i.done = !i.done; i.doneAt = new Date().toISOString(); Logic.touch(i); await save(); render(); },
   toggleTask: async v => { Logic.markDone(data, { kind: 'task', id: v }); await save(); render(); },
   toggleRoutine: async v => { const [day, id] = v.split('|'); Logic.setRoutine(data, day, id, !Logic.doneSet(data, day).has(id)); await save(); render(); },
@@ -270,9 +291,8 @@ const forms = {
 $app.addEventListener('submit', async e => {
   e.preventDefault();
   if (e.target.dataset.form === 'timer') {
-    const f = Object.fromEntries(new FormData(e.target)), m = Math.max(1, +f.minutes || 20);
-    data.timer = { kind: 'free', id: null, title: f.title.trim(), minutes: m, end: Date.now() + m * 6e4 };
-    await save(); render(); return;
+    const f = Object.fromEntries(new FormData(e.target));
+    return startTimer(f.title.trim(), +f.minutes > 0 ? +f.minutes : null);
   }
   if (e.target.dataset.form === 'chat') {
     const text = new FormData(e.target).get('text').trim(); if (!text || busy) return;

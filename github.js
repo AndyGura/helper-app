@@ -34,7 +34,7 @@ const Sync = (() => {
   const PATH = 'data/app.json';
   let timer = null;
   const cfg = d => d.settings?.ghToken && d.settings?.ghRepo ? { token: d.settings.ghToken, repo: d.settings.ghRepo } : null;
-  const shareable = ({ settings, chat, timer, updatedAt, ...rest }) => rest;
+  const shareable = ({ settings, chat, timer, timers, updatedAt, ...rest }) => rest;
   // Pull, merge into d (in place), push back if the merge changed anything. Returns true if d changed.
   async function sync(d, retry = true) {
     const c = cfg(d); if (!c) return false;
