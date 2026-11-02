@@ -87,6 +87,8 @@ const fmt = ms => { const s = Math.max(0, Math.ceil(ms / 1e3)), p = n => String(
 const views = {};
 // Timers: data.timers = [{id, title, kind, ref, dur (ms | null = stopwatch), acc (ms), run (ms | null)}].
 // Only one runs at a time; starting another pauses the running one.
+// Instant habits (Pro Flex, bedtime) have no duration: no timer for them.
+const timed = r => !!(r.goal || r.minutes >= 5);
 const elapsed = t => t.acc + (t.run ? Date.now() - t.run : 0);
 const shown = t => t.dur ? fmt(t.dur - elapsed(t)) : fmt(elapsed(t));
 function timers() {
@@ -137,11 +139,11 @@ views.home = () => {
     ${c && c.kind === 'sleep' ? `<div class="card"><h2>${esc(c.title)}</h2></div>` : c ? `<div class="card"><h2>${esc(c.title)}</h2>
       ${c.minutes ? `<p class="muted">${c.minutes} хв</p>` : ''}
       <div class="row">
-        ${c.minutes ? `<button class="primary" data-act="start">Почати ${c.minutes} хв</button>` : ''}
+        ${timed(c) ? `<button class="primary" data-act="start">Почати ${c.minutes} хв</button>` : ''}
         <button data-act="done">Зроблено</button><button data-act="other">Інше</button>
       </div></div>` : current === false ? '<p class="muted">Все зроблено. Відпочинь 🙂</p>' : ''}
     <form data-form="timer" class="add quick"><h3>Таймер</h3>
-      <select name="ref"><option value="">Своє (впиши нижче)</option>${data.routines.map(r => `<option value="${r.id}">${esc(r.title)}${r.goal ? ` (ціль ${hm(r.goal * 6e4)})` : ''}</option>`).join('')}</select>
+      <select name="ref"><option value="">Своє (впиши нижче)</option>${data.routines.filter(timed).map(r => `<option value="${r.id}">${esc(r.title)}${r.goal ? ` (ціль ${hm(r.goal * 6e4)})` : ''}</option>`).join('')}</select>
       <input name="title" placeholder="Що робиш">
       <div class="row"><input name="minutes" type="number" min="1" placeholder="хв (порожньо = секундомір)"><button class="primary">Почати</button></div></form>
   </section>`);
