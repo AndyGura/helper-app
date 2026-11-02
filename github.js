@@ -16,7 +16,7 @@ const GH = (() => {
   async function write(cfg, path, text, message, sha) {
     if (sha === undefined) sha = (await read(cfg, path))?.sha;
     const r = await api(cfg, path, { method: 'PUT', body: JSON.stringify({ message, content: b64e(text), ...(sha ? { sha } : {}) }) });
-    if (!r.ok) throw new Error(`GitHub ${r.status}`);
+    if (!r.ok) throw new Error(r.status === 404 || r.status === 403 ? `GitHub ${r.status}: токен не має доступу до репо (Contents: Read and write)` : `GitHub ${r.status}`);
     return (await r.json()).content.sha;
   }
   async function append(cfg, path, line, message) {
@@ -33,7 +33,7 @@ const GH = (() => {
 const Sync = (() => {
   const PATH = 'data/app.json';
   let timer = null;
-  const cfg = d => d.settings?.ghToken && d.settings?.ghRepo ? { token: d.settings.ghToken, repo: d.settings.ghRepo } : null;
+  const cfg = d => d.settings?.ghToken && d.settings?.ghRepo ? { token: d.settings.ghToken.trim(), repo: d.settings.ghRepo.trim().replace(/^https:\/\/github\.com\//, '').replace(/\/$/, '') } : null;
   const shareable = ({ settings, chat, timer, timers, updatedAt, ...rest }) => rest;
   // Pull, merge into d (in place), push back if the merge changed anything. Returns true if d changed.
   async function sync(d, retry = true) {
