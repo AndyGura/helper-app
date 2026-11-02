@@ -33,3 +33,4 @@ select{font:inherit;color:inherit;border-radius:12px;border:1px solid #3a3a46;ba
 .day.today{border-color:var(--acc)}.day.sel{outline:2px solid var(--fg)}.day i{position:absolute;top:4px;right:5px;width:6px;height:6px;border-radius:50%;background:var(--bad)}
 .quick{width:100%;margin-top:32px}.quick .row{align-items:center}
 .mini{width:auto;margin:0;padding:8px 14px}.paused{width:100%}.timer .list{text-align:left}
+.day em{position:absolute;bottom:1px;left:3px;font-size:10px;font-style:normal}

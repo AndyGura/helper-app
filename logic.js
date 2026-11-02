@@ -25,7 +25,7 @@ const Logic = (() => {
       out.push({ kind: 'task', id: t.id, title: t.title, minutes: t.minutes || 0, score: s, item: t });
     }
     for (const r of data.routines) {
-      if (doneToday.has(r.id) || (r.days && !r.days.includes(wd))) continue;
+      if (doneToday.has(r.id) || !appliesOn(r, today) || offOn(data, today, r.id)) continue;
       const from = r.from ?? 0, to = r.to ?? 24;
       const inWin = from <= to ? h >= from && h < to : h >= from || h < to; // supports overnight windows
       if (!inWin) continue;
@@ -60,6 +60,23 @@ const Logic = (() => {
   function setRoutine(data, day, id, done, now = Date.now()) {
     data.log[day] = { ...dayLog(data, day), [id]: done ? +now : -now };
   }
+
+  // Time tracked by timers: time[day][routineId] = ms. Routine with `goal` (min/day) is auto-marked when reached.
+  // Routine applies on a day (r.days = weekday numbers, 0 = Sunday). Off = excused that day: 'vacation' | 'sick'.
+  const appliesOn = (r, day) => !r.days || r.days.includes(new Date(day + 'T12:00:00').getDay());
+  const offOn = (data, day, id) => data.off?.[day]?.[id]?.s || '';
+  function setOff(data, day, id, status) {
+    const d = ((data.off = data.off || {})[day] = data.off[day] || {});
+    d[id] = { s: status, u: Date.now() };
+  }
+
+  function addTime(data, day, id, ms) {
+    const d = ((data.time = data.time || {})[day] = data.time[day] || {});
+    d[id] = (d[id] || 0) + ms;
+    const r = data.routines.find(x => x.id === id);
+    if (r?.goal && d[id] >= r.goal * 6e4 && !doneSet(data, day).has(id)) setRoutine(data, day, id, true);
+  }
+  const timeOn = (data, day, id) => data.time?.[day]?.[id] || 0;
 
   function markDone(data, c, now = new Date()) {
     if (c.kind === 'task') {
@@ -100,10 +117,20 @@ const Logic = (() => {
       const day = (out.log[d] = out.log[d] || {});
       for (const [id, t] of Object.entries(dayLog(src, d))) if (Math.abs(t) >= Math.abs(day[id] || 0)) day[id] = t;
     }
+    out.time = { ...(remote.time || {}) };
+    for (const [d, m] of Object.entries(local.time || {})) {
+      const day = (out.time[d] = { ...(out.time[d] || {}) });
+      for (const [id, ms] of Object.entries(m)) day[id] = Math.max(ms, day[id] || 0);
+    }
+    out.off = JSON.parse(JSON.stringify(remote.off || {}));
+    for (const [d, m] of Object.entries(local.off || {})) {
+      const day = (out.off[d] = out.off[d] || {});
+      for (const [id, v] of Object.entries(m)) if (!day[id] || v.u >= day[id].u) day[id] = v;
+    }
     return out;
   }
 
   const id = () => Math.random().toString(36).slice(2, 10);
-  return { doneSet, setRoutine, empty, candidates, pickNext, markDone, pruneShopping, localDay, id, touch, remove, merge, COLLECTIONS };
+  return { appliesOn, offOn, setOff, addTime, timeOn, doneSet, setRoutine, empty, candidates, pickNext, markDone, pruneShopping, localDay, id, touch, remove, merge, COLLECTIONS };
 })();
 if (typeof module !== 'undefined') module.exports = Logic;
