@@ -201,7 +201,7 @@ views.tasks = () => {
       <label><input name="focus" type="checkbox"> Фокус ★</label>
       <button class="primary">Додати</button></form>
     <h1>Щоденні звички</h1><ul class="list">${data.routines.map(r => `<li class="${today.has(r.id) ? 'done' : ''}" data-act="toggleRoutine" data-v="${Logic.localDay()}|${r.id}"><span class="box"></span>
-      <div><b>${esc(r.title)}</b><small>${r.goal ? `ціль ${hm(r.goal * 6e4)}/день (${hm(Logic.timeOn(data, Logic.localDay(), r.id))}) · ` : ''}${r.minutes ? r.minutes + ' хв · ' : ''}${r.from ?? 0}:00–${r.to ?? 24}:00${r.days ? ' · будні' : ''}</small></div>
+      <div><b>${esc(r.title)}</b><small>${r.goal ? `ціль ${hm(r.goal * 6e4)}/день (${hm(Logic.timeOn(data, Logic.localDay(), r.id))}) · ` : ''}${r.minutes ? r.minutes + ' хв · ' : ''}${r.from ?? 0}:00–${r.to ?? 24}:00${r.days ? ' · ' + (r.days.join() === '1,2,3,4,5' ? 'будні' : r.days.slice().sort((a, b) => ((a + 6) % 7) - ((b + 6) % 7)).map(x => ['Нд', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'][x]).join(' ')) : ''}</small></div>
       <button class="x" data-act="delRoutine" data-v="${r.id}">✕</button></li>`).join('')}</ul>
     <form data-form="addRoutine" class="add">
       <input name="title" placeholder="Звичка" required>
@@ -221,7 +221,7 @@ views.cal = () => {
   const cells = Array(lead).fill('<div></div>');
   for (let d = 1; d <= n; d++) {
     const k = key(d), act = data.routines.filter(r => Logic.appliesOn(r, k) && !Logic.offOn(data, k, r.id)), ds = Logic.doneSet(data, k);
-    const done = act.filter(r => ds.has(r.id)).length, total = act.length, off = data.routines.map(r => Logic.offOn(data, k, r.id)).find(Boolean);
+    const done = act.filter(r => ds.has(r.id) || Logic.coveredAhead(data, r, k)).length, total = act.length, off = data.routines.map(r => Logic.offOn(data, k, r.id)).find(Boolean);
     const due = data.tasks.some(t => t.due === k && !t.done), pct = total ? done / total : 0;
     cells.push(`<button class="day ${k === today ? 'today' : ''} ${k === calSel ? 'sel' : ''}" data-act="calDay" data-v="${k}"
       style="--p:${pct}">${d}${due ? '<i></i>' : ''}${off ? `<em>${OFF[off].slice(0, 2)}</em>` : ''}</button>`);
@@ -229,7 +229,7 @@ views.cal = () => {
   const sel = calSel && (() => {
     const ids = Logic.doneSet(data, calSel);
     const tasks = data.tasks.filter(t => t.due === calSel || (t.doneAt || '').startsWith(calSel));
-    return `<h3>${calSel}</h3><ul class="list">${data.routines.filter(r => Logic.appliesOn(r, calSel)).map(r => { const off = Logic.offOn(data, calSel, r.id); return `<li class="${ids.has(r.id) || off ? 'done' : ''}" data-act="toggleRoutine" data-v="${calSel}|${r.id}"><span class="box"></span><div><b>${esc(r.title)}</b>${off ? `<small>${OFF[off]}</small>` : ''}${r.goal || Logic.timeOn(data, calSel, r.id) ? `<small>${hm(Logic.timeOn(data, calSel, r.id))}${r.goal ? ' з ' + hm(r.goal * 6e4) : ''}</small>` : ''}</div>
+    return `<h3>${calSel}</h3><ul class="list">${data.routines.filter(r => Logic.appliesOn(r, calSel) || ids.has(r.id) || Logic.timeOn(data, calSel, r.id)).map(r => { const off = Logic.offOn(data, calSel, r.id), ahead = Logic.coveredAhead(data, r, calSel); return `<li class="${ids.has(r.id) || off || ahead ? 'done' : ''}" data-act="toggleRoutine" data-v="${calSel}|${r.id}"><span class="box"></span><div><b>${esc(r.title)}</b>${off ? `<small>${OFF[off]}</small>` : ahead ? '<small>зроблено наперед</small>' : !Logic.appliesOn(r, calSel) ? '<small>поза графіком (наперед)</small>' : ''}${r.goal || Logic.timeOn(data, calSel, r.id) ? `<small>${hm(Logic.timeOn(data, calSel, r.id))}${r.goal ? ' з ' + hm(r.goal * 6e4) : ''}</small>` : ''}</div>
       ${r.goal ? Object.keys(OFF).map(k => `<button class="mini ${off === k ? 'primary' : ''}" data-act="setOff" data-v="${calSel}|${r.id}|${k}" title="${OFF[k]}">${OFF[k].slice(0, 2)}</button>`).join('') : ''}</li>`; }).join('')}
       ${tasks.map(t => `<li class="${t.done ? 'done' : ''}" data-act="toggleTaskDone" data-v="${t.id}|${calSel}"><span class="box"></span><div><b>${esc(t.title)}</b><small>справа</small></div></li>`).join('')}</ul>`;
   })();
@@ -328,5 +328,7 @@ $app.addEventListener('submit', async e => {
   await save(); render();
 });
 
+// Block iOS pinch/double-tap zoom (iOS ignores user-scalable=no in some modes).
+['gesturestart', 'gesturechange'].forEach(ev => document.addEventListener(ev, e => e.preventDefault(), { passive: false }));
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then(r => r.update()).catch(() => {});
 render();

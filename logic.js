@@ -25,7 +25,7 @@ const Logic = (() => {
       out.push({ kind: 'task', id: t.id, title: t.title, minutes: t.minutes || 0, score: s, item: t });
     }
     for (const r of data.routines) {
-      if (doneToday.has(r.id) || !appliesOn(r, today) || offOn(data, today, r.id)) continue;
+      if (doneToday.has(r.id) || !appliesOn(r, today) || offOn(data, today, r.id) || coveredAhead(data, r, today)) continue;
       const from = r.from ?? 0, to = r.to ?? 24;
       const inWin = from <= to ? h >= from && h < to : h >= from || h < to; // supports overnight windows
       if (!inWin) continue;
@@ -64,6 +64,19 @@ const Logic = (() => {
   // Time tracked by timers: time[day][routineId] = ms. Routine with `goal` (min/day) is auto-marked when reached.
   // Routine applies on a day (r.days = weekday numbers, 0 = Sunday). Off = excused that day: 'vacation' | 'sick'.
   const appliesOn = (r, day) => !r.days || r.days.includes(new Date(day + 'T12:00:00').getDay());
+  // Done ahead: doing a scheduled routine on a non-scheduled day covers its next missed scheduled day
+  // in the same week (Mon–Sun). Walk the week chronologically, carrying credits.
+  function coveredAhead(data, r, day) {
+    if (!r.days) return false;
+    const d0 = new Date(day + 'T12:00:00'), mon = new Date(d0); mon.setDate(d0.getDate() - (d0.getDay() + 6) % 7);
+    let credit = 0;
+    for (let x = new Date(mon); ; x.setDate(x.getDate() + 1)) {
+      const k = localDay(x), sched = appliesOn(r, k), done = doneSet(data, k).has(r.id);
+      if (k === day) return sched && !done && credit > 0;
+      if (!sched && done) credit++;
+      else if (sched && !done && credit > 0) credit--;
+    }
+  }
   const offOn = (data, day, id) => data.off?.[day]?.[id]?.s || '';
   function setOff(data, day, id, status) {
     const d = ((data.off = data.off || {})[day] = data.off[day] || {});
@@ -131,6 +144,6 @@ const Logic = (() => {
   }
 
   const id = () => Math.random().toString(36).slice(2, 10);
-  return { appliesOn, offOn, setOff, addTime, timeOn, doneSet, setRoutine, empty, candidates, pickNext, markDone, pruneShopping, localDay, id, touch, remove, merge, COLLECTIONS };
+  return { coveredAhead, appliesOn, offOn, setOff, addTime, timeOn, doneSet, setRoutine, empty, candidates, pickNext, markDone, pruneShopping, localDay, id, touch, remove, merge, COLLECTIONS };
 })();
 if (typeof module !== 'undefined') module.exports = Logic;
