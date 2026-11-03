@@ -5,7 +5,7 @@ const Logic = (() => {
   const daysBetween = (a, b) => Math.round((Date.parse(b) - Date.parse(a)) / 864e5);
 
   function empty() {
-    return { shopping: [], tasks: [], routines: [], log: {}, deleted: {}, timer: null };
+    return { shopping: [], tasks: [], routines: [], inbox: [], memos: [], log: {}, deleted: {}, timer: null };
   }
 
   // Candidates: open one-off tasks + routines whose time window is now and not done today.
@@ -107,7 +107,7 @@ const Logic = (() => {
   }
 
   // ---- Sync merge: items carry `u` (ms of last change); deletions are tombstones in `deleted`. ----
-  const COLLECTIONS = ['shopping', 'tasks', 'routines'];
+  const COLLECTIONS = ['shopping', 'tasks', 'routines', 'inbox', 'memos']; // inbox: notes from the coach; memos: facts to remember
   const touch = (item, now = Date.now()) => { item.u = +now; return item; };
   function remove(data, coll, id, now = Date.now()) {
     data[coll] = data[coll].filter(x => x.id !== id);

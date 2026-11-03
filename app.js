@@ -135,6 +135,8 @@ views.home = () => {
   const c = current;
   shell(`<section class="home">
     ${pausedHtml ? `<div class="paused">${pausedHtml}</div>` : ''}
+    ${(data.inbox || []).length ? `<div class="inbox"><h3>Від помічника</h3>${data.inbox.map(n => `<div class="note"><p>${esc(n.text).replace(/\n/g, '<br>')}</p>
+      <button class="x" data-act="dismiss" data-v="${n.id}">✕</button></div>`).join('')}</div>` : ''}
     <button class="big" data-act="next">Що мені робити?</button>
     ${c && c.kind === 'sleep' ? `<div class="card"><h2>${esc(c.title)}</h2></div>` : c ? `<div class="card"><h2>${esc(c.title)}</h2>
       ${c.minutes ? `<p class="muted">${c.minutes} хв</p>` : ''}
@@ -146,6 +148,10 @@ views.home = () => {
       <select name="ref"><option value="">Своє (впиши нижче)</option>${data.routines.filter(timed).map(r => `<option value="${r.id}">${esc(r.title)}${r.goal ? ` (ціль ${hm(r.goal * 6e4)})` : ''}</option>`).join('')}</select>
       <input name="title" placeholder="Що робиш">
       <div class="row"><input name="minutes" type="number" min="1" placeholder="хв (порожньо = секундомір)"><button class="primary">Почати</button></div></form>
+    <form data-form="memo" class="add quick"><h3>Запам'ятай</h3>
+      <textarea name="text" rows="2" placeholder="Факт, ідея, що завгодно (напр. розмір шин 275/45 R20)" required></textarea>
+      <button class="primary">Зберегти</button>
+      ${(data.memos || []).length ? `<p class="muted">Чекають, поки помічник розкладе: ${data.memos.length}</p>` : ''}</form>
   </section>`);
 };
 function next() { current = Logic.pickNext(data, new Date(), skipped) || false; render(); }
@@ -284,6 +290,7 @@ const acts = {
   timerResume: async v => { for (const t of timers()) if (t.run) { logTime(t); t.acc = elapsed(t); t.run = null; } timers().find(x => x.id === v).run = Date.now(); await save(); render(); },
   toggleShop: async v => { const i = data.shopping.find(x => x.id === v); i.done = !i.done; i.doneAt = new Date().toISOString(); Logic.touch(i); await save(); render(); },
   toggleTask: async v => { Logic.markDone(data, { kind: 'task', id: v }); await save(); render(); },
+  dismiss: async v => { Logic.remove(data, 'inbox', v); await save(); render(); },
   setOff: async v => { const [day, id, st] = v.split('|'); Logic.setOff(data, day, id, Logic.offOn(data, day, id) === st ? '' : st); await save(); render(); },
   toggleRoutine: async v => { const [day, id] = v.split('|'); Logic.setRoutine(data, day, id, !Logic.doneSet(data, day).has(id)); await save(); render(); },
   toggleTaskDone: async v => {
@@ -294,7 +301,7 @@ const acts = {
   delRoutine: async v => { if (!confirm('Видалити звичку?')) return; Logic.remove(data, 'routines', v); await save(); render(); },
   export: async () => { await navigator.clipboard.writeText(JSON.stringify(data)); alert('Скопійовано'); },
   import: async () => {
-    try { const d = JSON.parse(document.getElementById('imp').value); const keep = { settings: data.settings, chat: data.chat }; data = Object.assign(Logic.empty(), d, keep); Logic.COLLECTIONS.forEach(c => data[c].forEach(i => Logic.touch(i))); await save(); alert('Імпортовано'); render(); }
+    try { const d = JSON.parse(document.getElementById('imp').value); const keep = { settings: data.settings, chat: data.chat }; data = Object.assign(Logic.empty(), d, keep); Logic.COLLECTIONS.forEach(c => (data[c] = data[c] || []).forEach(i => Logic.touch(i))); await save(); alert('Імпортовано'); render(); }
     catch { alert('Невірний JSON'); }
   },
   wipe: () => { if (confirm('Стерти всі дані на цьому пристрої?')) { Vault.wipe(); lock(); } },
@@ -306,6 +313,7 @@ $app.addEventListener('click', e => {
 $app.addEventListener('keydown', e => { if (e.key === 'Enter' && e.target.id?.startsWith('pin')) unlock(); });
 const num = v => v === '' ? undefined : +v;
 const forms = {
+  memo: f => (data.memos = data.memos || []).push({ u: Date.now(), id: Logic.id(), text: f.text.trim(), date: new Date().toISOString() }),
   addShop: f => data.shopping.push({ u: Date.now(), id: Logic.id(), store: f.store.trim(), text: f.text.trim(), note: f.note.trim(), done: false }),
   addTask: f => data.tasks.push({ u: Date.now(), id: Logic.id(), title: f.title.trim(), due: f.due || null, minutes: num(f.minutes), focus: !!f.focus, done: false }),
   settings: f => { data.settings = { ...data.settings, ...f }; Chat.resetContext(); },
