@@ -1,6 +1,8 @@
 // UI (Ukrainian). Single-user, local-first, encrypted vault (crypto.js).
 const $app = document.getElementById('app');
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+// Escape, keep line breaks, make http(s) links clickable (e.g. video tutorials in coach notes).
+const linkify = t => esc(t).replace(/https?:\/\/[^\s<]+/g, u => `<a href="${u}" target="_blank" rel="noopener">▶ відкрити</a>`).replace(/\n/g, '<br>');
 const LOCK_AFTER_MS = 60e3;
 let calMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1), calSel = null;
 let data = null, tab = 'home', skipped = [], current = null, hiddenAt = 0, tick = null, wakeLock = null, faceOk = false, busy = false;
@@ -135,7 +137,7 @@ views.home = () => {
   const c = current;
   shell(`<section class="home">
     ${pausedHtml ? `<div class="paused">${pausedHtml}</div>` : ''}
-    ${(data.inbox || []).length ? `<div class="inbox"><h3>Від помічника</h3>${data.inbox.map(n => `<div class="note"><p>${esc(n.text).replace(/\n/g, '<br>')}</p>
+    ${(data.inbox || []).length ? `<div class="inbox"><h3>Від помічника</h3>${data.inbox.map(n => `<div class="note"><p>${linkify(n.text)}</p>
       <button class="x" data-act="dismiss" data-v="${n.id}">✕</button></div>`).join('')}</div>` : ''}
     <button class="big" data-act="next">Що мені робити?</button>
     ${c && c.kind === 'sleep' ? `<div class="card"><h2>${esc(c.title)}</h2></div>` : c ? `<div class="card"><h2>${esc(c.title)}</h2>
@@ -153,7 +155,7 @@ views.home = () => {
       <button class="primary">Зберегти</button>
       ${(() => { const ms = data.memos || [], wait = ms.filter(m => !m.result);
         return (wait.length ? `<p class="muted">Чекають, поки помічник розкладе (щодня о 21:17): ${wait.length}</p>` : '')
-          + ms.filter(m => m.result).map(m => `<div class="note"><p><b>${esc(m.text)}</b><br><small class="muted">→ ${esc(m.result)}</small></p>
+          + ms.filter(m => m.result).map(m => `<div class="note"><p><b>${esc(m.text)}</b><br><small class="muted">→ ${linkify(m.result)}</small></p>
             <button type="button" class="x" data-act="dismissMemo" data-v="${m.id}">✕</button></div>`).join(''); })()}</form>
   </section>`);
 };
