@@ -36,3 +36,4 @@ select{font:inherit;color:inherit;border-radius:12px;border:1px solid #3a3a46;ba
 .day em{position:absolute;bottom:1px;left:3px;font-size:10px;font-style:normal}
 html,body{touch-action:manipulation;-webkit-text-size-adjust:100%}
 .inbox{width:100%;margin-bottom:16px}.note{display:flex;gap:8px;align-items:flex-start;background:var(--card);border-left:3px solid var(--acc);border-radius:12px;padding:10px 12px;margin:6px 0}.note p{flex:1;margin:0}
+nav button[data-v=settings]{flex:0 0 56px;font-size:24px}

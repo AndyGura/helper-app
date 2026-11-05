@@ -75,7 +75,7 @@ document.addEventListener('visibilitychange', () => {
 
 // ---------- Layout ----------
 // Chat tab hidden for now (API is billed separately); code kept in chat.js.
-const TABS = [['home', 'Головна'], ['cal', 'Календар'], ['shop', 'Покупки'], ['tasks', 'Справи'], ['settings', '⚙︎']];
+const TABS = [['home', 'Головна'], ['cal', 'Календар'], ['shop', 'Покупки'], ['tasks', 'Справи'], ['settings', '⚙️']];
 const shell = body => {
   $app.innerHTML = `<div class="page">${body}</div><nav>${TABS.map(([k, t]) =>
     `<button data-act="tab" data-v="${k}" class="${k === tab ? 'on' : ''}">${t}</button>`).join('')}</nav>`;
@@ -151,7 +151,10 @@ views.home = () => {
     <form data-form="memo" class="add quick"><h3>Запам'ятай</h3>
       <textarea name="text" rows="2" placeholder="Факт, ідея, що завгодно (напр. розмір шин 275/45 R20)" required></textarea>
       <button class="primary">Зберегти</button>
-      ${(data.memos || []).length ? `<p class="muted">Чекають, поки помічник розкладе: ${data.memos.length}</p>` : ''}</form>
+      ${(() => { const ms = data.memos || [], wait = ms.filter(m => !m.result);
+        return (wait.length ? `<p class="muted">Чекають, поки помічник розкладе (щодня о 21:17): ${wait.length}</p>` : '')
+          + ms.filter(m => m.result).map(m => `<div class="note"><p><b>${esc(m.text)}</b><br><small class="muted">→ ${esc(m.result)}</small></p>
+            <button type="button" class="x" data-act="dismissMemo" data-v="${m.id}">✕</button></div>`).join(''); })()}</form>
   </section>`);
 };
 function next() { current = Logic.pickNext(data, new Date(), skipped) || false; render(); }
@@ -187,8 +190,8 @@ views.shop = () => {
        <div><b>${esc(i.text)}</b>${i.note ? `<small>${esc(i.note)}</small>` : ''}</div></li>`).join('')}</ul>`).join('')
     || '<p class="muted">Список порожній</p>'}
     <form data-form="addShop" class="add">
-      <input name="store" list="stores" placeholder="Магазин" required>
-      <datalist id="stores">${stores.map(s => `<option value="${esc(s)}">`).join('')}</datalist>
+      ${stores.length ? `<select name="storeSel">${stores.map(s => `<option value="${esc(s)}">${esc(s)}</option>`).join('')}<option value="">+ Новий магазин…</option></select>` : ''}
+      <input name="store" placeholder="${stores.length ? 'або впиши новий магазин' : 'Магазин'}">
       <input name="text" placeholder="Що купити" required>
       <input name="note" placeholder="Розмір, модель, нотатка">
       <button class="primary">Додати</button></form>`);
@@ -290,6 +293,7 @@ const acts = {
   timerResume: async v => { for (const t of timers()) if (t.run) { logTime(t); t.acc = elapsed(t); t.run = null; } timers().find(x => x.id === v).run = Date.now(); await save(); render(); },
   toggleShop: async v => { const i = data.shopping.find(x => x.id === v); i.done = !i.done; i.doneAt = new Date().toISOString(); Logic.touch(i); await save(); render(); },
   toggleTask: async v => { Logic.markDone(data, { kind: 'task', id: v }); await save(); render(); },
+  dismissMemo: async v => { Logic.remove(data, 'memos', v); await save(); render(); },
   dismiss: async v => { Logic.remove(data, 'inbox', v); await save(); render(); },
   setOff: async v => { const [day, id, st] = v.split('|'); Logic.setOff(data, day, id, Logic.offOn(data, day, id) === st ? '' : st); await save(); render(); },
   toggleRoutine: async v => { const [day, id] = v.split('|'); Logic.setRoutine(data, day, id, !Logic.doneSet(data, day).has(id)); await save(); render(); },
@@ -314,7 +318,7 @@ $app.addEventListener('keydown', e => { if (e.key === 'Enter' && e.target.id?.st
 const num = v => v === '' ? undefined : +v;
 const forms = {
   memo: f => (data.memos = data.memos || []).push({ u: Date.now(), id: Logic.id(), text: f.text.trim(), date: new Date().toISOString() }),
-  addShop: f => data.shopping.push({ u: Date.now(), id: Logic.id(), store: f.store.trim(), text: f.text.trim(), note: f.note.trim(), done: false }),
+  addShop: f => data.shopping.push({ u: Date.now(), id: Logic.id(), store: f.store.trim() || f.storeSel || 'Інше', text: f.text.trim(), note: f.note.trim(), done: false }),
   addTask: f => data.tasks.push({ u: Date.now(), id: Logic.id(), title: f.title.trim(), due: f.due || null, minutes: num(f.minutes), focus: !!f.focus, done: false }),
   settings: f => { data.settings = { ...data.settings, ...f }; Chat.resetContext(); },
   addRoutine: f => data.routines.push({ u: Date.now(), id: Logic.id(), title: f.title.trim(), from: num(f.from), to: num(f.to), minutes: num(f.minutes), goal: num(f.goal), ...(f.weekdays ? { days: [1, 2, 3, 4, 5] } : {}) }),
