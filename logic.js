@@ -124,10 +124,16 @@ const Logic = (() => {
     const cap = dailyCap(data, day), ds = doneSet(data, day), wd = new Date(day + 'T12:00:00').getDay();
     const el = data.routines.filter(r => eligible(data, r, day));
     const urgency = r => r.perWeek ? (r.perWeek - weekCount(data, r, day)) / (7 - (wd + 6) % 7) : r.every ? 0.6 : 0.5;
-    const rest = el.filter(r => !r.fixed).sort((a, b) => (ds.has(b.id) - ds.has(a.id)) || ((a.prio || 2) - (b.prio || 2)) || (urgency(b) - urgency(a)) || (hash(a.id + day) - hash(b.id + day)));
+    // Overdue habits climb: late (4+ days) jumps ahead of normal ones within the cap; the single most overdue
+    // very-late one (perWeek pace lost, 2x `every`, or 7+ days) breaks through the cap. Never-done habits don't escalate. Fixed-weekday habits don't either.
+    const pr = r => { const b = r.prio || 2, s = sinceLast(data, r, day); if (b === 1 || r.days || s === Infinity) return b;
+      if (urgency(r) >= 1 || s >= (r.every ? r.every * 2 : 7)) return 1.2;
+      return s >= Math.max(4, r.every || 0) ? Math.max(1.5, b - 1) : b; };
+    const rest = el.filter(r => !r.fixed).sort((a, b) => (ds.has(b.id) - ds.has(a.id)) || (pr(a) - pr(b)) || (urgency(b) - urgency(a)) || (hash(a.id + day) - hash(b.id + day)));
     const plan = new Set(el.filter(r => r.fixed).map(r => r.id));
-    let n = 0;
-    for (const r of rest) if (ds.has(r.id) || (r.prio || 2) === 1 || n < cap) { plan.add(r.id); n++; }
+    let n = 0, burst = false;
+    for (const r of rest) { const p = pr(r), br = p === 1.2 && !burst;
+      if (ds.has(r.id) || p === 1 || br || n < cap) { plan.add(r.id); n++; if (br) burst = true; } }
     return plan;
   }
   // Done ahead: doing a scheduled routine on a non-scheduled day covers its next missed scheduled day
