@@ -106,7 +106,7 @@ const Logic = (() => {
   // Daily cap of planned habits (work / kids transport = `fixed`, outside the cap). Fewer on kids weeks.
   function dailyCap(data, day) {
     const wd = new Date(day + 'T12:00:00').getDay(), c = data.prefs?.caps || {};
-    return wd === 0 || wd === 6 ? (c.weekend ?? 5) : isKidsWeek(data, day) ? (c.kids ?? 3) : (c.weekday ?? 4);
+    return wd === 0 || wd === 6 ? (c.weekend ?? 4) : isKidsWeek(data, day) ? (c.kids ?? 2) : (c.weekday ?? 3);
   }
   // Habits that could be done on `day` at all.
   function eligible(data, r, day) {
@@ -133,7 +133,8 @@ const Logic = (() => {
     const plan = new Set(el.filter(r => r.fixed).map(r => r.id));
     let n = 0, burst = false;
     for (const r of rest) { const p = pr(r), br = p === 1.2 && !burst;
-      if (ds.has(r.id) || p === 1 || br || n < cap) { plan.add(r.id); n++; if (br) burst = true; } }
+      if (p === 1) { plan.add(r.id); continue; } // must-do: outside the cap
+      if (ds.has(r.id) || br || n < cap) { plan.add(r.id); n++; if (br) burst = true; } }
     return plan;
   }
   // Done ahead: doing a scheduled routine on a non-scheduled day covers its next missed scheduled day

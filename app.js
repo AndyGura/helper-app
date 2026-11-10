@@ -222,7 +222,7 @@ views.tasks = () => {
       <div class="row"><input name="due" type="date"><input name="minutes" type="number" min="1" placeholder="хв"></div>
       <label><input name="focus" type="checkbox"> Фокус ★</label>
       <button class="primary">Додати</button></form>
-    <h1>Сьогодні</h1><p class="muted">План: до ${Logic.dailyCap(data, Logic.localDay())} звичок${Logic.isKidsWeek(data, Logic.localDay()) ? ' (тиждень з дітьми)' : ''}. Робота й діти окремо.</p>
+    <h1>Сьогодні</h1><p class="muted">Обов'язкові — завжди. Решта: до ${Logic.dailyCap(data, Logic.localDay())} на день${Logic.isKidsWeek(data, Logic.localDay()) ? ' (тиждень з дітьми)' : ''}.</p>
     <ul class="list">${inPlan.map(routineLi).join('')}</ul>
     ${rest.length ? `<details><summary>Бонус і пізніше (${rest.length})</summary><ul class="list">${rest.map(routineLi).join('')}</ul></details>` : ''}
     <p class="muted">Зробив щось учора без аппки? Календар → тапни день → відміть.</p>
