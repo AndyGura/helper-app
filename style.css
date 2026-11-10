@@ -38,3 +38,8 @@ html,body{touch-action:manipulation;-webkit-text-size-adjust:100%}
 .inbox{width:100%;margin-bottom:16px}.note{display:flex;gap:8px;align-items:flex-start;background:var(--card);border-left:3px solid var(--acc);border-radius:12px;padding:10px 12px;margin:6px 0}.note p{flex:1;margin:0}
 nav button[data-v=settings]{flex:0 0 56px;font-size:24px}
 .note a{color:var(--acc);font-weight:600}
+.pad{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:12px 0}.pad button{margin:0;padding:16px 0;font-size:26px;border-radius:50%;aspect-ratio:1;max-width:84px;justify-self:center;width:100%}
+.moodchart{display:flex;gap:3px;align-items:flex-end;height:60px}.moodchart div{flex:1;display:flex;gap:1px;align-items:flex-end;position:relative;height:100%}
+.moodchart i{flex:1;border-radius:3px 3px 0 0}.moodchart .m,.lm{background:var(--acc);color:var(--acc)}.moodchart .e,.le{background:#6aa9ff;color:#6aa9ff}
+.moodchart span{position:absolute;bottom:-16px;left:0;right:0;text-align:center;font-size:10px;color:var(--muted)}#mood{margin:16px 0 24px}.checkin{margin-top:0;margin-bottom:16px}
+#mood p{margin-top:22px}

@@ -107,7 +107,7 @@ const Logic = (() => {
   }
 
   // ---- Sync merge: items carry `u` (ms of last change); deletions are tombstones in `deleted`. ----
-  const COLLECTIONS = ['shopping', 'tasks', 'routines', 'inbox', 'memos']; // inbox: notes from the coach; memos: facts to remember
+  const COLLECTIONS = ['shopping', 'tasks', 'routines', 'inbox', 'memos', 'checkins']; // inbox: notes from the coach; memos: facts to remember
   const touch = (item, now = Date.now()) => { item.u = +now; return item; };
   function remove(data, coll, id, now = Date.now()) {
     data[coll] = data[coll].filter(x => x.id !== id);

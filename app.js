@@ -48,11 +48,14 @@ function lockView(msg = '') {
   $app.innerHTML = `<section class="lock">
     <h1>${isNew ? 'Придумай PIN' : 'Введи PIN'}</h1>
     <p class="muted">${isNew ? '4–6 цифр. Не такий, як код телефона.' : `Спроб: ${Vault.triesLeft()}`}</p>
-    <input id="pin" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="6" autocomplete="off">
-    ${isNew ? '<input id="pin2" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="6" placeholder="Ще раз" autocomplete="off">' : ''}
-    <button class="primary" data-act="unlock">${isNew ? 'Створити' : 'Відкрити'}</button>
+    ${isNew ? `<input id="pin" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="6" autocomplete="off">
+    <input id="pin2" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="6" placeholder="Ще раз" autocomplete="off">
+    <button class="primary" data-act="unlock">Створити</button>` : `
+    <input id="pin" type="password" readonly inputmode="none" maxlength="6" autocomplete="off">
+    <div class="pad">${[1, 2, 3, 4, 5, 6, 7, 8, 9].map(n => `<button data-act="key" data-v="${n}">${n}</button>`).join('')}
+      <button data-act="key" data-v="back">⌫</button><button data-act="key" data-v="0">0</button><button class="primary" data-act="unlock">✓</button></div>`}
     <p class="err">${esc(msg)}</p></section>`;
-  document.getElementById('pin').focus();
+  if (isNew) document.getElementById('pin').focus();
 }
 async function unlock() {
   const pin = document.getElementById('pin').value;
@@ -139,6 +142,9 @@ views.home = () => {
     ${pausedHtml ? `<div class="paused">${pausedHtml}</div>` : ''}
     ${(data.inbox || []).length ? `<div class="inbox"><h3>Від помічника</h3>${data.inbox.map(n => `<div class="note"><p>${linkify(n.text)}</p>
       <button class="x" data-act="dismiss" data-v="${n.id}">✕</button></div>`).join('')}</div>` : ''}
+    ${(data.checkins || []).some(c => c.date === Logic.localDay()) ? '' : `<form data-form="checkin" class="add quick checkin"><h3>Як ти сьогодні?</h3>
+      <textarea name="text" rows="2" placeholder="Своїми словами: настрій, сили, сон, що на душі" required></textarea>
+      <button class="primary">Записати</button></form>`}
     <button class="big" data-act="next">Що мені робити?</button>
     ${c && c.kind === 'sleep' ? `<div class="card"><h2>${esc(c.title)}</h2></div>` : c ? `<div class="card"><h2>${esc(c.title)}</h2>
       ${c.minutes ? `<p class="muted">${c.minutes} хв</p>` : ''}
@@ -246,8 +252,26 @@ views.cal = () => {
   })();
   shell(`<div class="row cal-head"><button data-act="calMove" data-v="-1">‹</button><h1>${MONTHS[m]} ${y}</h1><button data-act="calMove" data-v="1">›</button></div>
     <div class="cal">${['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Нд'].map(w => `<span>${w}</span>`).join('')}${cells.join('')}</div>
+    <div id="mood"></div>
     <p class="muted">Заливка дня = частка виконаних звичок, крапка = справа з дедлайном. Натисни день, потім пункт, щоб відмітити.</p>${sel || ''}`);
+  loadMood();
 };
+
+// Mood chart: last 14 days from journal/mood.csv (scores inferred by the coach from check-ins).
+let moodCache = null;
+async function loadMood() {
+  const c = Sync.cfg(data), el = () => document.getElementById('mood');
+  if (!c || !el()) return;
+  if (!moodCache) {
+    try { const f = await GH.read(c, 'journal/mood.csv'); moodCache = f ? f.text.trim().split('\n').slice(1).map(l => l.split(',')) : []; }
+    catch { return; }
+  }
+  const days = [...Array(14)].map((_, i) => Logic.localDay(new Date(Date.now() - (13 - i) * 864e5)));
+  const by = Object.fromEntries(moodCache.map(r => [r[0], r]));
+  const bar = (v, cls) => `<i class="${cls}" style="height:${(+v || 0) * 8}px"></i>`;
+  if (el()) el().innerHTML = `<h3>Настрій і сили, 14 днів</h3><div class="moodchart">${days.map(d => `<div>${bar(by[d]?.[1], 'm')}${bar(by[d]?.[2], 'e')}<span>${+d.slice(8)}</span></div>`).join('')}</div>
+    <p class="muted"><b class="lm">■</b> настрій <b class="le">■</b> сили (1–5, помічник оцінює з твоїх чек-інів)</p>`;
+}
 
 // ---------- Chat ----------
 views.chat = () => {
@@ -279,6 +303,7 @@ views.settings = () => { const s = data.settings || {}; shell(`<h1>Налашт�
 
 // ---------- Events ----------
 const acts = {
+  key: v => { const el = document.getElementById('pin'); el.value = v === 'back' ? el.value.slice(0, -1) : (el.value + v).slice(0, 6); },
   unlock, lock, next, faceEnable, faceCheck,
   faceOff: () => { localStorage.removeItem(CRED); render(); },
   newChat: async () => { data.chat = []; Chat.resetContext(); await save(); render(); },
@@ -319,6 +344,7 @@ $app.addEventListener('click', e => {
 $app.addEventListener('keydown', e => { if (e.key === 'Enter' && e.target.id?.startsWith('pin')) unlock(); });
 const num = v => v === '' ? undefined : +v;
 const forms = {
+  checkin: f => (data.checkins = data.checkins || []).push({ u: Date.now(), id: Logic.id(), date: Logic.localDay(), text: f.text.trim() }),
   memo: f => (data.memos = data.memos || []).push({ u: Date.now(), id: Logic.id(), text: f.text.trim(), date: new Date().toISOString() }),
   addShop: f => data.shopping.push({ u: Date.now(), id: Logic.id(), store: f.store.trim() || f.storeSel || 'Інше', text: f.text.trim(), note: f.note.trim(), done: false }),
   addTask: f => data.tasks.push({ u: Date.now(), id: Logic.id(), title: f.title.trim(), due: f.due || null, minutes: num(f.minutes), focus: !!f.focus, done: false }),
