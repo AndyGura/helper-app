@@ -218,13 +218,14 @@ views.tasks = () => {
       <label><input name="focus" type="checkbox"> Фокус ★</label>
       <button class="primary">Додати</button></form>
     <h1>Щоденні звички</h1><ul class="list">${data.routines.map(r => `<li class="${today.has(r.id) ? 'done' : ''}" data-act="toggleRoutine" data-v="${Logic.localDay()}|${r.id}"><span class="box"></span>
-      <div><b>${esc(r.title)}</b><small>${r.goal ? `ціль ${hm(r.goal * 6e4)}/день (${hm(Logic.timeOn(data, Logic.localDay(), r.id))}) · ` : ''}${r.minutes ? r.minutes + ' хв · ' : ''}${r.from ?? 0}:00–${r.to ?? 24}:00${r.days ? ' · ' + (r.days.join() === '1,2,3,4,5' ? 'будні' : r.days.slice().sort((a, b) => ((a + 6) % 7) - ((b + 6) % 7)).map(x => ['Нд', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'][x]).join(' ')) : ''}</small></div>
+      <div><b>${esc(r.title)}${(st => st >= 2 ? ` <span class="streak">🔥${st}</span>` : '')(Logic.streak(data, r))}</b><small>${r.perWeek ? `${Logic.weekCount(data, r, Logic.localDay())}/${r.perWeek} цього тижня · ` : ''}${r.goal ? `ціль ${hm(r.goal * 6e4)}/день (${hm(Logic.timeOn(data, Logic.localDay(), r.id))}) · ` : ''}${r.minutes ? r.minutes + ' хв · ' : ''}${r.from ?? 0}:00–${r.to ?? 24}:00${r.days ? ' · ' + (r.days.join() === '1,2,3,4,5' ? 'будні' : r.days.slice().sort((a, b) => ((a + 6) % 7) - ((b + 6) % 7)).map(x => ['Нд', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'][x]).join(' ')) : ''}</small></div>
       <button class="x" data-act="delRoutine" data-v="${r.id}">✕</button></li>`).join('')}</ul>
     <form data-form="addRoutine" class="add">
       <input name="title" placeholder="Звичка" required>
       <div class="row"><input name="from" type="number" min="0" max="23" placeholder="з (год)"><input name="to" type="number" min="1" max="24" placeholder="до (год)"><input name="minutes" type="number" min="1" placeholder="хв"></div>
       <input name="goal" type="number" min="1" placeholder="Ціль на день у хвилинах, через таймер (напр. 360 = 6 год)">
       <label><input name="weekdays" type="checkbox"> Лише будні (Пн–Пт)</label>
+      <input name="perWeek" type="number" min="1" max="6" placeholder="Або N разів на тиждень (будь-які дні)">
       <button class="primary">Додати</button></form>`);
 };
 
@@ -349,7 +350,7 @@ const forms = {
   addShop: f => data.shopping.push({ u: Date.now(), id: Logic.id(), store: f.store.trim() || f.storeSel || 'Інше', text: f.text.trim(), note: f.note.trim(), done: false }),
   addTask: f => data.tasks.push({ u: Date.now(), id: Logic.id(), title: f.title.trim(), due: f.due || null, minutes: num(f.minutes), focus: !!f.focus, done: false }),
   settings: f => { data.settings = { ...data.settings, ...f }; Chat.resetContext(); },
-  addRoutine: f => data.routines.push({ u: Date.now(), id: Logic.id(), title: f.title.trim(), from: num(f.from), to: num(f.to), minutes: num(f.minutes), goal: num(f.goal), ...(f.weekdays ? { days: [1, 2, 3, 4, 5] } : {}) }),
+  addRoutine: f => data.routines.push({ u: Date.now(), id: Logic.id(), title: f.title.trim(), from: num(f.from), to: num(f.to), minutes: num(f.minutes), goal: num(f.goal), ...(f.weekdays ? { days: [1, 2, 3, 4, 5] } : {}), ...(num(f.perWeek) ? { perWeek: num(f.perWeek) } : {}) }),
 };
 $app.addEventListener('submit', async e => {
   e.preventDefault();

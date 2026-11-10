@@ -43,3 +43,4 @@ nav button[data-v=settings]{flex:0 0 56px;font-size:24px}
 .moodchart i{flex:1;border-radius:3px 3px 0 0}.moodchart .m,.lm{background:var(--acc);color:var(--acc)}.moodchart .e,.le{background:#6aa9ff;color:#6aa9ff}
 .moodchart span{position:absolute;bottom:-16px;left:0;right:0;text-align:center;font-size:10px;color:var(--muted)}#mood{margin:16px 0 24px}.checkin{margin-top:0;margin-bottom:16px}
 #mood p{margin-top:22px}
+.streak{font-weight:400;font-size:14px;color:var(--acc)}

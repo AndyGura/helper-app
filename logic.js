@@ -26,11 +26,13 @@ const Logic = (() => {
     }
     for (const r of data.routines) {
       if (doneToday.has(r.id) || !appliesOn(r, today) || offOn(data, today, r.id) || coveredAhead(data, r, today)) continue;
+      const wk = r.perWeek ? weekCount(data, r, today) : 0;
+      if (r.perWeek && wk >= r.perWeek) continue;
       const from = r.from ?? 0, to = r.to ?? 24;
       const inWin = from <= to ? h >= from && h < to : h >= from || h < to; // supports overnight windows
       if (!inWin) continue;
       const span = (to - from + 24) % 24 || 24, passed = (h - from + 24) % 24;
-      out.push({ kind: 'routine', id: r.id, title: r.title, minutes: r.minutes || 0, score: 60 + 30 * passed / span, item: r });
+      out.push({ kind: 'routine', id: r.id, title: r.title, minutes: r.minutes || 0, score: 60 + 30 * passed / span - (r.perWeek ? 25 - 25 * Math.min(1, (r.perWeek - wk) / (7 - (wd + 6) % 7)) : 0), item: r });
     }
     for (const c of out) {
       if (late && c.minutes && c.minutes <= 15) c.score += 15;
@@ -63,6 +65,27 @@ const Logic = (() => {
 
   // Time tracked by timers: time[day][routineId] = ms. Routine with `goal` (min/day) is auto-marked when reached.
   // Routine applies on a day (r.days = weekday numbers, 0 = Sunday). Off = excused that day: 'vacation' | 'sick'.
+  // Week (Mon–Sun) containing `day`, as day keys up to and including it.
+  function weekDays(day) {
+    const d0 = new Date(day + 'T12:00:00'), out = [];
+    for (let x = new Date(d0); out.unshift(localDay(x)), (x.getDay() + 6) % 7 > 0; x.setDate(x.getDate() - 1));
+    return out;
+  }
+  // N-times-a-week routines: how many times done this week (up to and including `day`).
+  const weekCount = (data, r, day) => weekDays(day).filter(k => doneSet(data, k).has(r.id)).length;
+  // "Never miss twice" streak: scheduled days counted back from today (today counts only if done),
+  // a single miss is forgiven, two scheduled misses in a row end the streak.
+  function streak(data, r, today = localDay()) {
+    if (r.perWeek) return 0;
+    let n = 0, miss = 0, x = new Date(today + 'T12:00:00');
+    for (let i = 0; i < 400; i++, x.setDate(x.getDate() - 1)) {
+      const k = localDay(x);
+      if (!appliesOn(r, k) || offOn(data, k, r.id)) continue;
+      const done = doneSet(data, k).has(r.id) || coveredAhead(data, r, k);
+      if (done) { n++; miss = 0; } else if (k !== today) { if (++miss >= 2) break; }
+    }
+    return n;
+  }
   const appliesOn = (r, day) => !r.days || r.days.includes(new Date(day + 'T12:00:00').getDay());
   // Done ahead: doing a scheduled routine on a non-scheduled day covers its next missed scheduled day
   // in the same week (Mon–Sun). Walk the week chronologically, carrying credits.
@@ -144,6 +167,6 @@ const Logic = (() => {
   }
 
   const id = () => Math.random().toString(36).slice(2, 10);
-  return { coveredAhead, appliesOn, offOn, setOff, addTime, timeOn, doneSet, setRoutine, empty, candidates, pickNext, markDone, pruneShopping, localDay, id, touch, remove, merge, COLLECTIONS };
+  return { weekCount, streak, coveredAhead, appliesOn, offOn, setOff, addTime, timeOn, doneSet, setRoutine, empty, candidates, pickNext, markDone, pruneShopping, localDay, id, touch, remove, merge, COLLECTIONS };
 })();
 if (typeof module !== 'undefined') module.exports = Logic;
