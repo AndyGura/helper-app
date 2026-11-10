@@ -238,7 +238,7 @@ views.cal = () => {
   const n = new Date(y, m + 1, 0).getDate(), lead = (new Date(y, m, 1).getDay() + 6) % 7;
   const cells = Array(lead).fill('<div></div>');
   for (let d = 1; d <= n; d++) {
-    const k = key(d), act = data.routines.filter(r => Logic.appliesOn(r, k) && !Logic.offOn(data, k, r.id)), ds = Logic.doneSet(data, k);
+    const k = key(d), ds = Logic.doneSet(data, k), act = data.routines.filter(r => Logic.appliesOn(r, k) && !Logic.offOn(data, k, r.id) && (!r.perWeek || ds.has(r.id)));
     const done = act.filter(r => ds.has(r.id) || Logic.coveredAhead(data, r, k)).length, total = act.length, off = data.routines.map(r => Logic.offOn(data, k, r.id)).find(Boolean);
     const due = data.tasks.some(t => t.due === k && !t.done), pct = total ? done / total : 0;
     cells.push(`<button class="day ${k === today ? 'today' : ''} ${k === calSel ? 'sel' : ''}" data-act="calDay" data-v="${k}"
