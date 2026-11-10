@@ -106,7 +106,7 @@ const Logic = (() => {
   // Daily cap of planned habits (work / kids transport = `fixed`, outside the cap). Fewer on kids weeks.
   function dailyCap(data, day) {
     const wd = new Date(day + 'T12:00:00').getDay(), c = data.prefs?.caps || {};
-    return wd === 0 || wd === 6 ? (c.weekend ?? 4) : isKidsWeek(data, day) ? (c.kids ?? 2) : (c.weekday ?? 3);
+    return wd === 0 || wd === 6 ? (c.weekend ?? 5) : isKidsWeek(data, day) ? (c.kids ?? 3) : (c.weekday ?? 4);
   }
   // Habits that could be done on `day` at all.
   function eligible(data, r, day) {
