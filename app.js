@@ -151,7 +151,7 @@ views.home = () => {
       <div class="row">
         ${timed(c) ? `<button class="primary" data-act="start">Почати ${c.minutes} хв</button>` : ''}
         <button data-act="done">Зроблено</button><button data-act="other">Інше</button>
-      </div></div>` : current === false ? '<p class="muted">Все зроблено. Відпочинь 🙂</p>' : ''}
+      </div></div>` : current === false ? `<div class="card"><h2>План на сьогодні виконано 🎉</h2><p class="muted">Решта — бонус, без тиску.</p><button data-act="bonus">Є сили? Бонус</button></div>` : ''}
     <form data-form="timer" class="add quick"><h3>Таймер</h3>
       <select name="ref"><option value="">Своє (впиши нижче)</option>${data.routines.filter(timed).map(r => `<option value="${r.id}">${esc(r.title)}${r.goal ? ` (ціль ${hm(r.goal * 6e4)})` : ''}</option>`).join('')}</select>
       <input name="title" placeholder="Що робиш">
@@ -165,7 +165,7 @@ views.home = () => {
             <button type="button" class="x" data-act="dismissMemo" data-v="${m.id}">✕</button></div>`).join(''); })()}</form>
   </section>`);
 };
-function next() { current = Logic.pickNext(data, new Date(), skipped) || false; render(); }
+function next(all = false) { current = Logic.pickNext(data, new Date(), skipped, all) || false; render(); }
 async function finishTimer(id) {
   const t = timers().find(x => x.id === id); if (!t) return;
   data.timers = timers().filter(x => x.id !== id);
@@ -209,26 +209,38 @@ views.shop = () => {
 views.tasks = () => {
   const open = data.tasks.filter(t => !t.done).sort((a, b) => (a.due || '9') < (b.due || '9') ? -1 : 1);
   const today = Logic.doneSet(data, Logic.localDay());
-  shell(`<h1>Справи</h1><ul class="list">${open.map(t => `<li data-act="toggleTask" data-v="${t.id}"><span class="box"></span>
+  const taskLi = t => `<li data-act="toggleTask" data-v="${t.id}"><span class="box"></span>
       <div><b>${t.focus ? '★ ' : ''}${esc(t.title)}</b><small>${[t.due, t.minutes && t.minutes + ' хв'].filter(Boolean).join(' · ')}</small></div>
-      <button class="x" data-act="delTask" data-v="${t.id}">✕</button></li>`).join('') || '<p class="muted">Немає справ</p>'}</ul>
+      <button class="x" data-act="delTask" data-v="${t.id}">✕</button></li>`;
+  const top = open.slice(0, 3), later = open.slice(3);
+  const routineLi = routineLiFactory(today);
+  const plan = Logic.dayPlan(data, Logic.localDay()), inPlan = data.routines.filter(r => plan.has(r.id)), rest = data.routines.filter(r => !plan.has(r.id));
+  shell(`<h1>Справи</h1><ul class="list">${top.map(taskLi).join('') || '<p class="muted">Немає справ</p>'}</ul>
+    ${later.length ? `<details><summary>Пізніше (${later.length})</summary><ul class="list">${later.map(taskLi).join('')}</ul></details>` : ''}
     <form data-form="addTask" class="add">
       <input name="title" placeholder="Нова справа" required>
       <div class="row"><input name="due" type="date"><input name="minutes" type="number" min="1" placeholder="хв"></div>
       <label><input name="focus" type="checkbox"> Фокус ★</label>
       <button class="primary">Додати</button></form>
-    <h1>Щоденні звички</h1><ul class="list">${data.routines.map(r => `<li class="${today.has(r.id) ? 'done' : ''}" data-act="toggleRoutine" data-v="${Logic.localDay()}|${r.id}"><span class="box"></span>
+    <h1>Сьогодні</h1><p class="muted">План: до ${Logic.dailyCap(data, Logic.localDay())} звичок${Logic.isKidsWeek(data, Logic.localDay()) ? ' (тиждень з дітьми)' : ''}. Робота й діти окремо.</p>
+    <ul class="list">${inPlan.map(routineLi).join('')}</ul>
+    ${rest.length ? `<details><summary>Бонус і пізніше (${rest.length})</summary><ul class="list">${rest.map(routineLi).join('')}</ul></details>` : ''}
+    <p class="muted">Зробив щось учора без аппки? Календар → тапни день → відміть.</p>
+    <details><summary>+ Нова звичка</summary>${routineFormHtml()}</details>`);
+};
+function routineLiFactory(today) { return r => `<li class="${today.has(r.id) ? 'done' : ''}" data-act="toggleRoutine" data-v="${Logic.localDay()}|${r.id}"><span class="box"></span>
       <div><b>${esc(r.title)}${(st => st >= 2 ? ` <span class="streak">🔥${st}</span>` : '')(Logic.streak(data, r))}</b><small>${r.perWeek ? `${Logic.weekCount(data, r, Logic.localDay())}/${r.perWeek} цього тижня · ` : ''}${r.every ? `раз на ${r.every} дн · ${(n => n === Infinity ? 'ще не було' : n === 1 && !today.has(r.id) ? 'вчора' : today.has(r.id) ? 'сьогодні' : n + ' дн тому')(Logic.sinceLast(data, r, Logic.localDay()))} · ` : ''}${r.goal ? `ціль ${hm(r.goal * 6e4)}/день (${hm(Logic.timeOn(data, Logic.localDay(), r.id))}) · ` : ''}${r.minutes ? r.minutes + ' хв · ' : ''}${r.from ?? 0}:00–${r.to ?? 24}:00${r.days ? ' · ' + (r.days.join() === '1,2,3,4,5' ? 'будні' : r.days.slice().sort((a, b) => ((a + 6) % 7) - ((b + 6) % 7)).map(x => ['Нд', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'][x]).join(' ')) : ''}</small></div>
-      <button class="x" data-act="delRoutine" data-v="${r.id}">✕</button></li>`).join('')}</ul>
+      <button class="x" data-act="delRoutine" data-v="${r.id}">✕</button></li>`; }
+function routineFormHtml() { return `
     <form data-form="addRoutine" class="add">
       <input name="title" placeholder="Звичка" required>
       <div class="row"><input name="from" type="number" min="0" max="23" placeholder="з (год)"><input name="to" type="number" min="1" max="24" placeholder="до (год)"><input name="minutes" type="number" min="1" placeholder="хв"></div>
       <input name="goal" type="number" min="1" placeholder="Ціль на день у хвилинах, через таймер (напр. 360 = 6 год)">
+      <select name="prio"><option value="2">Звичайна</option><option value="1">Обов'язкова (завжди в плані)</option><option value="3">Бонус (якщо є сили)</option></select>
       <label><input name="weekdays" type="checkbox"> Лише будні (Пн–Пт)</label>
       <input name="perWeek" type="number" min="1" max="6" placeholder="Або N разів на тиждень (будь-які дні)">
       <input name="every" type="number" min="2" max="365" placeholder="Або раз на N днів (нагадує щодня, поки не зробиш)">
-      <button class="primary">Додати</button></form>`);
-};
+      <button class="primary">Додати</button></form>`; }
 
 // ---------- Calendar: habit marks + tasks by due date ----------
 const OFF = { vacation: '🌴 відпустка', sick: '🤒 лікарняний' };
@@ -239,7 +251,7 @@ views.cal = () => {
   const n = new Date(y, m + 1, 0).getDate(), lead = (new Date(y, m, 1).getDay() + 6) % 7;
   const cells = Array(lead).fill('<div></div>');
   for (let d = 1; d <= n; d++) {
-    const k = key(d), ds = Logic.doneSet(data, k), act = data.routines.filter(r => Logic.appliesOn(r, k) && !Logic.offOn(data, k, r.id) && (!(r.perWeek || r.every) || ds.has(r.id)));
+    const k = key(d), ds = Logic.doneSet(data, k), pl = Logic.dayPlan(data, k), act = data.routines.filter(r => pl.has(r.id) && !Logic.offOn(data, k, r.id));
     const done = act.filter(r => ds.has(r.id) || Logic.coveredAhead(data, r, k)).length, total = act.length, off = data.routines.map(r => Logic.offOn(data, k, r.id)).find(Boolean);
     const due = data.tasks.some(t => t.due === k && !t.done), pct = total ? done / total : 0;
     cells.push(`<button class="day ${k === today ? 'today' : ''} ${k === calSel ? 'sel' : ''}" data-act="calDay" data-v="${k}"
@@ -248,9 +260,13 @@ views.cal = () => {
   const sel = calSel && (() => {
     const ids = Logic.doneSet(data, calSel);
     const tasks = data.tasks.filter(t => t.due === calSel || (t.doneAt || '').startsWith(calSel));
-    return `<h3>${calSel}</h3><ul class="list">${data.routines.filter(r => Logic.appliesOn(r, calSel) || ids.has(r.id) || Logic.timeOn(data, calSel, r.id)).map(r => { const off = Logic.offOn(data, calSel, r.id), ahead = Logic.coveredAhead(data, r, calSel); return `<li class="${ids.has(r.id) || off || ahead ? 'done' : ''}" data-act="toggleRoutine" data-v="${calSel}|${r.id}"><span class="box"></span><div><b>${esc(r.title)}</b>${off ? `<small>${OFF[off]}</small>` : ahead ? '<small>зроблено наперед</small>' : !Logic.appliesOn(r, calSel) ? '<small>поза графіком (наперед)</small>' : ''}${r.goal || Logic.timeOn(data, calSel, r.id) ? `<small>${hm(Logic.timeOn(data, calSel, r.id))}${r.goal ? ' з ' + hm(r.goal * 6e4) : ''}</small>` : ''}</div>
-      ${r.goal ? Object.keys(OFF).map(k => `<button class="mini ${off === k ? 'primary' : ''}" data-act="setOff" data-v="${calSel}|${r.id}|${k}" title="${OFF[k]}">${OFF[k].slice(0, 2)}</button>`).join('') : ''}</li>`; }).join('')}
-      ${tasks.map(t => `<li class="${t.done ? 'done' : ''}" data-act="toggleTaskDone" data-v="${t.id}|${calSel}"><span class="box"></span><div><b>${esc(t.title)}</b><small>справа</small></div></li>`).join('')}</ul>`;
+    const pl = Logic.dayPlan(data, calSel), main = r => pl.has(r.id) || ids.has(r.id) || Logic.timeOn(data, calSel, r.id);
+    const li = r => { const off = Logic.offOn(data, calSel, r.id), ahead = Logic.coveredAhead(data, r, calSel); return `<li class="${ids.has(r.id) || off || ahead ? 'done' : ''}" data-act="toggleRoutine" data-v="${calSel}|${r.id}"><span class="box"></span><div><b>${esc(r.title)}</b>${off ? `<small>${OFF[off]}</small>` : ahead ? '<small>зроблено наперед</small>' : !Logic.appliesOn(r, calSel, data) ? '<small>поза графіком (наперед)</small>' : ''}${r.goal || Logic.timeOn(data, calSel, r.id) ? `<small>${hm(Logic.timeOn(data, calSel, r.id))}${r.goal ? ' з ' + hm(r.goal * 6e4) : ''}</small>` : ''}</div>
+      ${r.goal ? Object.keys(OFF).map(k => `<button class="mini ${off === k ? 'primary' : ''}" data-act="setOff" data-v="${calSel}|${r.id}|${k}" title="${OFF[k]}">${OFF[k].slice(0, 2)}</button>`).join('') : ''}</li>`; };
+    const others = data.routines.filter(r => !main(r));
+    return `<h3>${calSel}</h3><ul class="list">${data.routines.filter(main).map(li).join('')}
+      ${tasks.map(t => `<li class="${t.done ? 'done' : ''}" data-act="toggleTaskDone" data-v="${t.id}|${calSel}"><span class="box"></span><div><b>${esc(t.title)}</b><small>справа</small></div></li>`).join('')}</ul>
+      ${others.length ? `<details><summary>Інші звички — відмітити заднім числом (${others.length})</summary><ul class="list">${others.map(li).join('')}</ul></details>` : ''}`;
   })();
   shell(`<div class="row cal-head"><button data-act="calMove" data-v="-1">‹</button><h1>${MONTHS[m]} ${y}</h1><button data-act="calMove" data-v="1">›</button></div>
     <div class="cal">${['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Нд'].map(w => `<span>${w}</span>`).join('')}${cells.join('')}</div>
@@ -297,6 +313,8 @@ views.settings = () => { const s = data.settings || {}; shell(`<h1>Налашт�
     <input name="ghToken" type="password" placeholder="GitHub токен (fine-grained, Contents: RW)" value="${esc(s.ghToken)}">
     <button class="primary">Зберегти</button></form>
   <button data-act="syncNow">Синхронізувати зараз</button>
+  <h3>Тиждень з дітьми</h3><p class="muted">Чергується щотижня. Зараз: ${Logic.isKidsWeek(data, Logic.localDay()) ? '<b>мій тиждень з дітьми</b> (план менший)' : 'звичайний тиждень'}.</p>
+  <button data-act="kidsWeek">${Logic.isKidsWeek(data, Logic.localDay()) ? 'Ні, цей тиждень звичайний' : 'Цей тиждень — мій з дітьми'}</button>
   <h3>Перенесення даних</h3><p class="muted">Експорт — незашифрований JSON. Не зберігай його в спільних місцях.</p>
   <button data-act="export">Скопіювати експорт</button>
   <textarea id="imp" rows="5" placeholder="Встав JSON для імпорту"></textarea>
@@ -306,7 +324,11 @@ views.settings = () => { const s = data.settings || {}; shell(`<h1>Налашт�
 // ---------- Events ----------
 const acts = {
   key: v => { const el = document.getElementById('pin'); el.value = v === 'back' ? el.value.slice(0, -1) : (el.value + v).slice(0, 6); },
-  unlock, lock, next, faceEnable, faceCheck,
+  bonus: () => next(true),
+  kidsWeek: async () => { const mon = d => { const x = new Date(d); x.setDate(x.getDate() - (x.getDay() + 6) % 7); return Logic.localDay(x); };
+    const now = new Date(), on = Logic.isKidsWeek(data, Logic.localDay()); data.prefs = { ...(data.prefs || {}), kidsWeekStart: mon(on ? now.getTime() + 7 * 864e5 : now), u: Date.now() }; await save(); render(); },
+  unlock, lock,
+  next: () => next(), faceEnable, faceCheck,
   faceOff: () => { localStorage.removeItem(CRED); render(); },
   newChat: async () => { data.chat = []; Chat.resetContext(); await save(); render(); },
   syncNow: () => syncNow(false),
@@ -351,7 +373,7 @@ const forms = {
   addShop: f => data.shopping.push({ u: Date.now(), id: Logic.id(), store: f.store.trim() || f.storeSel || 'Інше', text: f.text.trim(), note: f.note.trim(), done: false }),
   addTask: f => data.tasks.push({ u: Date.now(), id: Logic.id(), title: f.title.trim(), due: f.due || null, minutes: num(f.minutes), focus: !!f.focus, done: false }),
   settings: f => { data.settings = { ...data.settings, ...f }; Chat.resetContext(); },
-  addRoutine: f => data.routines.push({ u: Date.now(), id: Logic.id(), title: f.title.trim(), from: num(f.from), to: num(f.to), minutes: num(f.minutes), goal: num(f.goal), ...(f.weekdays ? { days: [1, 2, 3, 4, 5] } : {}), ...(num(f.perWeek) ? { perWeek: num(f.perWeek) } : {}), ...(num(f.every) ? { every: num(f.every) } : {}) }),
+  addRoutine: f => data.routines.push({ u: Date.now(), id: Logic.id(), title: f.title.trim(), from: num(f.from), to: num(f.to), minutes: num(f.minutes), goal: num(f.goal), ...(f.weekdays ? { days: [1, 2, 3, 4, 5] } : {}), ...(num(f.perWeek) ? { perWeek: num(f.perWeek) } : {}), ...(num(f.every) ? { every: num(f.every) } : {}), ...(+f.prio !== 2 ? { prio: +f.prio } : {}) }),
 };
 $app.addEventListener('submit', async e => {
   e.preventDefault();

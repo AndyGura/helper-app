@@ -9,9 +9,9 @@ const Logic = (() => {
   }
 
   // Candidates: open one-off tasks + routines whose time window is now and not done today.
-  function candidates(data, now = new Date()) {
+  function candidates(data, now = new Date(), all = false) {
     const today = localDay(now), h = now.getHours() + now.getMinutes() / 60, wd = now.getDay();
-    const doneToday = doneSet(data, today);
+    const doneToday = doneSet(data, today), plan = all ? null : dayPlan(data, today);
     const late = h >= 22 || h < 4;
     const out = [];
     for (const t of data.tasks) {
@@ -25,7 +25,8 @@ const Logic = (() => {
       out.push({ kind: 'task', id: t.id, title: t.title, minutes: t.minutes || 0, score: s, item: t });
     }
     for (const r of data.routines) {
-      if (doneToday.has(r.id) || !appliesOn(r, today) || offOn(data, today, r.id) || coveredAhead(data, r, today)) continue;
+      if (plan && !plan.has(r.id)) continue;
+      if (doneToday.has(r.id) || !appliesOn(r, today, data) || offOn(data, today, r.id) || coveredAhead(data, r, today)) continue;
       const wk = r.perWeek ? weekCount(data, r, today) : 0;
       if (r.perWeek && wk >= r.perWeek) continue;
       if (r.every && !dueEvery(data, r, today)) continue;
@@ -47,8 +48,8 @@ const Logic = (() => {
   const SLEEP = ['Йди спи, трудяга 😴', 'Йди спи, сова ти така 🦉', 'Йди спи, невгамовний 😄', 'Йди спи, вічний двигун ⚡',
     'Йди спи, непосида 🙃', 'Йди спи, трудоголік ти мій 💤', 'Йди спи, шило ти невгамовне 😜'];
   const isNight = now => now.getHours() < 5;
-  function pickNext(data, now = new Date(), skipped = []) {
-    let list = candidates(data, now).filter(c => !skipped.includes(c.id));
+  function pickNext(data, now = new Date(), skipped = [], all = false) {
+    let list = candidates(data, now, all).filter(c => !skipped.includes(c.id));
     if (isNight(now)) {
       const today = localDay(now);
       list = list.filter(c => c.minutes && c.minutes <= 5 && (c.kind === 'routine' || (c.item.due && c.item.due <= today)));
@@ -89,13 +90,46 @@ const Logic = (() => {
     let n = 0, miss = 0, x = new Date(today + 'T12:00:00');
     for (let i = 0; i < 400; i++, x.setDate(x.getDate() - 1)) {
       const k = localDay(x);
-      if (!appliesOn(r, k) || offOn(data, k, r.id)) continue;
+      if (!appliesOn(r, k, data) || offOn(data, k, r.id)) continue;
       const done = doneSet(data, k).has(r.id) || coveredAhead(data, r, k);
       if (done) { n++; miss = 0; } else if (k !== today) { if (++miss >= 2) break; }
     }
     return n;
   }
-  const appliesOn = (r, day) => !r.days || r.days.includes(new Date(day + 'T12:00:00').getDay());
+  const appliesOn = (r, day, data) => (!r.days || r.days.includes(new Date(day + 'T12:00:00').getDay())) && (!r.kidsWeek || !data || isKidsWeek(data, day));
+  // Alternating weeks when Andy is in charge of the kids: prefs.kidsWeekStart = a Monday of such a week.
+  function isKidsWeek(data, day) {
+    const s = data.prefs?.kidsWeekStart; if (!s) return false;
+    const mon = weekDays(day)[0], w = Math.round((Date.parse(mon) - Date.parse(s)) / (7 * 864e5));
+    return ((w % 2) + 2) % 2 === 0;
+  }
+  // Daily cap of planned habits (work / kids transport = `fixed`, outside the cap). Fewer on kids weeks.
+  function dailyCap(data, day) {
+    const wd = new Date(day + 'T12:00:00').getDay(), c = data.prefs?.caps || {};
+    return wd === 0 || wd === 6 ? (c.weekend ?? 5) : isKidsWeek(data, day) ? (c.kids ?? 3) : (c.weekday ?? 4);
+  }
+  // Habits that could be done on `day` at all.
+  function eligible(data, r, day) {
+    const done = doneSet(data, day).has(r.id);
+    if (done) return true;
+    if (!appliesOn(r, day, data) || offOn(data, day, r.id) || coveredAhead(data, r, day)) return false;
+    if (r.perWeek && weekCount(data, r, day) >= r.perWeek) return false;
+    if (r.every && !dueEvery(data, r, day)) return false;
+    return true;
+  }
+  // Small stable hash so equal-priority habits rotate fairly between days.
+  const hash = s => [...s].reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 7);
+  // Today's plan: fixed items + everything already done + priority 1 (must) + best of the rest up to the cap.
+  function dayPlan(data, day) {
+    const cap = dailyCap(data, day), ds = doneSet(data, day), wd = new Date(day + 'T12:00:00').getDay();
+    const el = data.routines.filter(r => eligible(data, r, day));
+    const urgency = r => r.perWeek ? (r.perWeek - weekCount(data, r, day)) / (7 - (wd + 6) % 7) : r.every ? 0.6 : 0.5;
+    const rest = el.filter(r => !r.fixed).sort((a, b) => (ds.has(b.id) - ds.has(a.id)) || ((a.prio || 2) - (b.prio || 2)) || (urgency(b) - urgency(a)) || (hash(a.id + day) - hash(b.id + day)));
+    const plan = new Set(el.filter(r => r.fixed).map(r => r.id));
+    let n = 0;
+    for (const r of rest) if (ds.has(r.id) || (r.prio || 2) === 1 || n < cap) { plan.add(r.id); n++; }
+    return plan;
+  }
   // Done ahead: doing a scheduled routine on a non-scheduled day covers its next missed scheduled day
   // in the same week (Mon–Sun). Walk the week chronologically, carrying credits.
   function coveredAhead(data, r, day) {
@@ -103,7 +137,7 @@ const Logic = (() => {
     const d0 = new Date(day + 'T12:00:00'), mon = new Date(d0); mon.setDate(d0.getDate() - (d0.getDay() + 6) % 7);
     let credit = 0;
     for (let x = new Date(mon); ; x.setDate(x.getDate() + 1)) {
-      const k = localDay(x), sched = appliesOn(r, k), done = doneSet(data, k).has(r.id);
+      const k = localDay(x), sched = appliesOn(r, k, data), done = doneSet(data, k).has(r.id);
       if (k === day) return sched && !done && credit > 0;
       if (!sched && done) credit++;
       else if (sched && !done && credit > 0) credit--;
@@ -172,10 +206,12 @@ const Logic = (() => {
       const day = (out.off[d] = out.off[d] || {});
       for (const [id, v] of Object.entries(m)) if (!day[id] || v.u >= day[id].u) day[id] = v;
     }
+    const lp = local.prefs, rp = remote.prefs;
+    if (lp || rp) out.prefs = (lp?.u || 0) >= (rp?.u || 0) ? lp : rp;
     return out;
   }
 
   const id = () => Math.random().toString(36).slice(2, 10);
-  return { weekCount, sinceLast, dueEvery, streak, coveredAhead, appliesOn, offOn, setOff, addTime, timeOn, doneSet, setRoutine, empty, candidates, pickNext, markDone, pruneShopping, localDay, id, touch, remove, merge, COLLECTIONS };
+  return { isKidsWeek, dailyCap, dayPlan, weekCount, sinceLast, dueEvery, streak, coveredAhead, appliesOn, offOn, setOff, addTime, timeOn, doneSet, setRoutine, empty, candidates, pickNext, markDone, pruneShopping, localDay, id, touch, remove, merge, COLLECTIONS };
 })();
 if (typeof module !== 'undefined') module.exports = Logic;
