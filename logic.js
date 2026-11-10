@@ -28,6 +28,7 @@ const Logic = (() => {
       if (doneToday.has(r.id) || !appliesOn(r, today) || offOn(data, today, r.id) || coveredAhead(data, r, today)) continue;
       const wk = r.perWeek ? weekCount(data, r, today) : 0;
       if (r.perWeek && wk >= r.perWeek) continue;
+      if (r.every && !dueEvery(data, r, today)) continue;
       const from = r.from ?? 0, to = r.to ?? 24;
       const inWin = from <= to ? h >= from && h < to : h >= from || h < to; // supports overnight windows
       if (!inWin) continue;
@@ -73,10 +74,18 @@ const Logic = (() => {
   }
   // N-times-a-week routines: how many times done this week (up to and including `day`).
   const weekCount = (data, r, day) => weekDays(day).filter(k => doneSet(data, k).has(r.id)).length;
+  // Every-N-days routines (r.every = N): days since last done before `day` (Infinity if never in 400 days).
+  function sinceLast(data, r, day) {
+    const x = new Date(day + 'T12:00:00');
+    for (let i = 1; i <= 400; i++) { x.setDate(x.getDate() - 1); if (doneSet(data, localDay(x)).has(r.id)) return i; }
+    return Infinity;
+  }
+  // Due every day once N days have passed since last done; a miss doesn't buy a break, it keeps nagging.
+  const dueEvery = (data, r, day) => sinceLast(data, r, day) >= r.every;
   // "Never miss twice" streak: scheduled days counted back from today (today counts only if done),
   // a single miss is forgiven, two scheduled misses in a row end the streak.
   function streak(data, r, today = localDay()) {
-    if (r.perWeek) return 0;
+    if (r.perWeek || r.every) return 0;
     let n = 0, miss = 0, x = new Date(today + 'T12:00:00');
     for (let i = 0; i < 400; i++, x.setDate(x.getDate() - 1)) {
       const k = localDay(x);
@@ -167,6 +176,6 @@ const Logic = (() => {
   }
 
   const id = () => Math.random().toString(36).slice(2, 10);
-  return { weekCount, streak, coveredAhead, appliesOn, offOn, setOff, addTime, timeOn, doneSet, setRoutine, empty, candidates, pickNext, markDone, pruneShopping, localDay, id, touch, remove, merge, COLLECTIONS };
+  return { weekCount, sinceLast, dueEvery, streak, coveredAhead, appliesOn, offOn, setOff, addTime, timeOn, doneSet, setRoutine, empty, candidates, pickNext, markDone, pruneShopping, localDay, id, touch, remove, merge, COLLECTIONS };
 })();
 if (typeof module !== 'undefined') module.exports = Logic;
