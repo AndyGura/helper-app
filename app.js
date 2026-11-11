@@ -4,7 +4,7 @@ const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': 
 // Escape, keep line breaks, make http(s) links clickable (e.g. video tutorials in coach notes).
 const linkify = t => esc(t).replace(/https?:\/\/[^\s<]+/g, u => `<a href="${u}" target="_blank" rel="noopener">▶ відкрити</a>`).replace(/\n/g, '<br>');
 const LOCK_AFTER_MS = 60e3;
-let calMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1), calSel = null;
+let calMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1), calSel = null, editId = null;
 let data = null, tab = 'home', skipped = [], current = null, hiddenAt = 0, tick = null, wakeLock = null, faceOk = false, busy = false;
 const CRED = 'helper.cred';
 
@@ -120,7 +120,7 @@ views.home = () => {
   if (t) {
     shell(`<section class="timer"><p class="muted">Тільки це:</p><h2>${esc(t.title)}</h2>
       <div class="clock" id="clock">${shown(t)}</div>
-      ${(() => { const r = t.kind === 'routine' && data.routines.find(x => x.id === t.ref); return r?.goal ? `<p class="muted" id="goal">Сьогодні: ${hm(Logic.timeOn(data, Logic.localDay(), r.id))} з ${hm(r.goal * 6e4)}</p>` : ''; })()}
+      ${(() => { const r = t.kind === 'routine' && data.routines.find(x => x.id === t.ref); return r?.goal ? `<p class="muted" id="goal">Сьогодні: ${hm(Logic.timeOn(data, Logic.localDay(), r.id))} з ${hm(r.goal * 6e4)}</p><button data-act="timerGoal" data-v="${t.id}">Ціль виконана ✓</button>` : ''; })()}
       <div class="row"><button data-act="timerPause" data-v="${t.id}">Пауза</button><button data-act="timerDone" data-v="${t.id}" class="primary">Готово</button></div>
       ${t.dur ? `<a class="btn" href="shortcuts://run-shortcut?name=FocusTimer&input=${Math.ceil((t.dur - elapsed(t)) / 6e4)}">Таймер iPhone (офлайн)</a>` : ''}
       <button data-act="timerStop" data-v="${t.id}">Скасувати</button>${pausedHtml}</section>`);
@@ -209,38 +209,42 @@ views.shop = () => {
 views.tasks = () => {
   const open = data.tasks.filter(t => !t.done).sort((a, b) => (a.due || '9') < (b.due || '9') ? -1 : 1);
   const today = Logic.doneSet(data, Logic.localDay());
-  const taskLi = t => `<li data-act="toggleTask" data-v="${t.id}"><span class="box"></span>
+  const taskLi = t => t.id === editId ? `<li class="edit">${taskFormHtml(t)}</li>` : `<li data-act="toggleTask" data-v="${t.id}"><span class="box"></span>
       <div><b>${t.focus ? '★ ' : ''}${esc(t.title)}</b><small>${[t.due, t.minutes && t.minutes + ' хв'].filter(Boolean).join(' · ')}</small></div>
-      <button class="x" data-act="delTask" data-v="${t.id}">✕</button></li>`;
+      <button class="x" data-act="edit" data-v="${t.id}">✎</button><button class="x" data-act="delTask" data-v="${t.id}">✕</button></li>`;
   const top = open.slice(0, 3), later = open.slice(3);
   const routineLi = routineLiFactory(today);
   const plan = Logic.dayPlan(data, Logic.localDay()), inPlan = data.routines.filter(r => plan.has(r.id)), rest = data.routines.filter(r => !plan.has(r.id));
   shell(`<h1>Справи</h1><ul class="list">${top.map(taskLi).join('') || '<p class="muted">Немає справ</p>'}</ul>
-    ${later.length ? `<details><summary>Пізніше (${later.length})</summary><ul class="list">${later.map(taskLi).join('')}</ul></details>` : ''}
-    <form data-form="addTask" class="add">
-      <input name="title" placeholder="Нова справа" required>
-      <div class="row"><input name="due" type="date"><input name="minutes" type="number" min="1" placeholder="хв"></div>
-      <label><input name="focus" type="checkbox"> Фокус ★</label>
-      <button class="primary">Додати</button></form>
+    ${later.length ? `<details ${later.some(t => t.id === editId) ? 'open' : ''}><summary>Пізніше (${later.length})</summary><ul class="list">${later.map(taskLi).join('')}</ul></details>` : ''}
+    ${taskFormHtml()}
     <h1>Сьогодні</h1><p class="muted">Обов'язкові — завжди. Решта: до ${Logic.dailyCap(data, Logic.localDay())} на день${Logic.isKidsWeek(data, Logic.localDay()) ? ' (тиждень з дітьми)' : ''}.</p>
     <ul class="list">${inPlan.map(routineLi).join('')}</ul>
-    ${rest.length ? `<details><summary>Бонус і пізніше (${rest.length})</summary><ul class="list">${rest.map(routineLi).join('')}</ul></details>` : ''}
+    ${rest.length ? `<details ${rest.some(r => r.id === editId) ? 'open' : ''}><summary>Бонус і пізніше (${rest.length})</summary><ul class="list">${rest.map(routineLi).join('')}</ul></details>` : ''}
     <p class="muted">Зробив щось учора без аппки? Календар → тапни день → відміть.</p>
     <details><summary>+ Нова звичка</summary>${routineFormHtml()}</details>`);
 };
-function routineLiFactory(today) { return r => `<li class="${today.has(r.id) ? 'done' : ''}" data-act="toggleRoutine" data-v="${Logic.localDay()}|${r.id}"><span class="box"></span>
+function taskFormHtml(t) { const v = k => t?.[k] != null ? `value="${esc(String(t[k]))}"` : ''; return `
+    <form data-form="${t ? 'saveTask' : 'addTask'}" class="add">${t ? `<input type="hidden" name="id" value="${t.id}">` : ''}
+      <input name="title" placeholder="Нова справа" required ${v('title')}>
+      <div class="row"><input name="due" type="date" ${v('due')}><input name="minutes" type="number" min="1" placeholder="хв" ${v('minutes')}></div>
+      <label><input name="focus" type="checkbox" ${t?.focus ? 'checked' : ''}> Фокус ★</label>
+      <button class="primary">${t ? 'Зберегти' : 'Додати'}</button>${t ? '<button type="button" data-act="edit" data-v="">Скасувати</button>' : ''}</form>`; }
+function routineLiFactory(today) { return r => r.id === editId ? `<li class="edit">${routineFormHtml(r)}</li>` : `<li class="${today.has(r.id) ? 'done' : ''}" data-act="toggleRoutine" data-v="${Logic.localDay()}|${r.id}"><span class="box"></span>
       <div><b>${esc(r.title)}${(st => st >= 2 ? ` <span class="streak">🔥${st}</span>` : '')(Logic.streak(data, r))}</b><small>${r.perWeek ? `${Logic.weekCount(data, r, Logic.localDay())}/${r.perWeek} цього тижня · ` : ''}${r.every ? `раз на ${r.every} дн · ${(n => n === Infinity ? 'ще не було' : n === 1 && !today.has(r.id) ? 'вчора' : today.has(r.id) ? 'сьогодні' : n + ' дн тому')(Logic.sinceLast(data, r, Logic.localDay()))} · ` : ''}${r.goal ? `ціль ${hm(r.goal * 6e4)}/день (${hm(Logic.timeOn(data, Logic.localDay(), r.id))}) · ` : ''}${r.minutes ? r.minutes + ' хв · ' : ''}${r.from ?? 0}:00–${r.to ?? 24}:00${r.days ? ' · ' + (r.days.join() === '1,2,3,4,5' ? 'будні' : r.days.slice().sort((a, b) => ((a + 6) % 7) - ((b + 6) % 7)).map(x => ['Нд', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'][x]).join(' ')) : ''}</small></div>
-      <button class="x" data-act="delRoutine" data-v="${r.id}">✕</button></li>`; }
-function routineFormHtml() { return `
-    <form data-form="addRoutine" class="add">
-      <input name="title" placeholder="Звичка" required>
-      <div class="row"><input name="from" type="number" min="0" max="23" placeholder="з (год)"><input name="to" type="number" min="1" max="24" placeholder="до (год)"><input name="minutes" type="number" min="1" placeholder="хв"></div>
-      <input name="goal" type="number" min="1" placeholder="Ціль на день у хвилинах, через таймер (напр. 360 = 6 год)">
-      <select name="prio"><option value="2">Звичайна</option><option value="1">Обов'язкова (завжди в плані)</option><option value="3">Бонус (якщо є сили)</option></select>
-      <label><input name="weekdays" type="checkbox"> Лише будні (Пн–Пт)</label>
-      <input name="perWeek" type="number" min="1" max="6" placeholder="Або N разів на тиждень (будь-які дні)">
-      <input name="every" type="number" min="2" max="365" placeholder="Або раз на N днів (нагадує щодня, поки не зробиш)">
-      <button class="primary">Додати</button></form>`; }
+      <button class="x" data-act="edit" data-v="${r.id}">✎</button><button class="x" data-act="delRoutine" data-v="${r.id}">✕</button></li>`; }
+const DAYS = [1, 2, 3, 4, 5, 6, 0], DN = ['Нд', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'];
+function routineFormHtml(r) { const v = k => r?.[k] != null ? `value="${r[k]}"` : '', pr = r?.prio || (r?.fixed ? 1 : 2); return `
+    <form data-form="${r ? 'saveRoutine' : 'addRoutine'}" class="add">${r ? `<input type="hidden" name="id" value="${r.id}">` : ''}
+      <input name="title" placeholder="Звичка" required ${r ? `value="${esc(r.title)}"` : ''}>
+      <div class="row"><input name="from" type="number" min="0" max="23" step="0.5" placeholder="з (год)" ${v('from')}><input name="to" type="number" min="1" max="24" step="0.5" placeholder="до (год)" ${v('to')}><input name="minutes" type="number" min="1" placeholder="хв" ${v('minutes')}></div>
+      <input name="goal" type="number" min="1" placeholder="Ціль на день у хвилинах, через таймер (напр. 360 = 6 год)" ${v('goal')}>
+      <select name="prio">${[[1, "Обов'язкова (завжди в плані)"], [2, 'Бажана'], [3, 'Бонус (якщо є сили)']].map(([k, t]) => `<option value="${k}" ${pr === k ? 'selected' : ''}>${t}</option>`).join('')}</select>
+      <div class="days">${DAYS.map(d => `<label><input name="d${d}" type="checkbox" ${r?.days?.includes(d) ? 'checked' : ''}>${DN[d]}</label>`).join('')}</div>
+      <small class="muted">Дні не відмічені = будь-який день</small>
+      <input name="perWeek" type="number" min="1" max="6" placeholder="Або N разів на тиждень (будь-які дні)" ${v('perWeek')}>
+      <input name="every" type="number" min="2" max="365" placeholder="Або раз на N днів (нагадує щодня, поки не зробиш)" ${v('every')}>
+      <button class="primary">${r ? 'Зберегти' : 'Додати'}</button>${r ? '<button type="button" data-act="edit" data-v="">Скасувати</button>' : ''}</form>`; }
 
 // ---------- Calendar: habit marks + tasks by due date ----------
 const OFF = { vacation: '🌴 відпустка', sick: '🤒 лікарняний' };
@@ -352,6 +356,8 @@ const acts = {
     const [id, day] = v.split('|'), t = data.tasks.find(x => x.id === id); if (!t) return;
     t.done = !t.done; t.doneAt = t.done ? (day === Logic.localDay() ? new Date().toISOString() : day + 'T12:00:00.000Z') : undefined; Logic.touch(t); await save(); render();
   },
+  edit: v => { editId = v || null; render(); },
+  timerGoal: v => { const t = timers().find(x => x.id === v), r = t && data.routines.find(x => x.id === t.ref); if (!r) return; clearInterval(tick); logTime(t); const left = r.goal * 6e4 - Logic.timeOn(data, Logic.localDay(), r.id); if (left > 0) Logic.addTime(data, Logic.localDay(), r.id, left); finishTimer(v); },
   delTask: async v => { Logic.remove(data, 'tasks', v); await save(); render(); },
   delRoutine: async v => { if (!confirm('Видалити звичку?')) return; Logic.remove(data, 'routines', v); await save(); render(); },
   export: async () => { await navigator.clipboard.writeText(JSON.stringify(data)); alert('Скопійовано'); },
@@ -367,13 +373,24 @@ $app.addEventListener('click', e => {
 });
 $app.addEventListener('keydown', e => { if (e.key === 'Enter' && e.target.id?.startsWith('pin')) unlock(); });
 const num = v => v === '' ? undefined : +v;
+function routineFrom(f, old) {
+  const r = { ...old, u: Date.now(), title: f.title.trim() };
+  for (const k of ['from', 'to', 'minutes', 'goal', 'days', 'perWeek', 'every', 'prio']) delete r[k];
+  const days = DAYS.filter(d => f['d' + d]);
+  for (const k of ['from', 'to', 'minutes', 'goal', 'perWeek', 'every']) if (num(f[k]) != null) r[k] = num(f[k]);
+  if (days.length && days.length < 7) r.days = days;
+  if (+f.prio !== 2) r.prio = +f.prio; if (+f.prio !== 1) delete r.fixed;
+  return r;
+}
 const forms = {
   checkin: f => (data.checkins = data.checkins || []).push({ u: Date.now(), id: Logic.id(), date: Logic.localDay(), text: f.text.trim() }),
   memo: f => (data.memos = data.memos || []).push({ u: Date.now(), id: Logic.id(), text: f.text.trim(), date: new Date().toISOString() }),
   addShop: f => data.shopping.push({ u: Date.now(), id: Logic.id(), store: f.store.trim() || f.storeSel || 'Інше', text: f.text.trim(), note: f.note.trim(), done: false }),
   addTask: f => data.tasks.push({ u: Date.now(), id: Logic.id(), title: f.title.trim(), due: f.due || null, minutes: num(f.minutes), focus: !!f.focus, done: false }),
   settings: f => { data.settings = { ...data.settings, ...f }; Chat.resetContext(); },
-  addRoutine: f => data.routines.push({ u: Date.now(), id: Logic.id(), title: f.title.trim(), from: num(f.from), to: num(f.to), minutes: num(f.minutes), goal: num(f.goal), ...(f.weekdays ? { days: [1, 2, 3, 4, 5] } : {}), ...(num(f.perWeek) ? { perWeek: num(f.perWeek) } : {}), ...(num(f.every) ? { every: num(f.every) } : {}), ...(+f.prio !== 2 ? { prio: +f.prio } : {}) }),
+  addRoutine: f => data.routines.push(routineFrom(f, { id: Logic.id() })),
+  saveRoutine: f => { const i = data.routines.findIndex(r => r.id === f.id); if (i >= 0) data.routines[i] = routineFrom(f, data.routines[i]); editId = null; },
+  saveTask: f => { const t = data.tasks.find(x => x.id === f.id); if (t) Object.assign(t, { u: Date.now(), title: f.title.trim(), due: f.due || null, minutes: num(f.minutes), focus: !!f.focus }); editId = null; },
 };
 $app.addEventListener('submit', async e => {
   e.preventDefault();
