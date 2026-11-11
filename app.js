@@ -4,7 +4,7 @@ const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': 
 // Escape, keep line breaks, make http(s) links clickable (e.g. video tutorials in coach notes).
 const linkify = t => esc(t).replace(/https?:\/\/[^\s<]+/g, u => `<a href="${u}" target="_blank" rel="noopener">▶ відкрити</a>`).replace(/\n/g, '<br>');
 const LOCK_AFTER_MS = 60e3;
-let calMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1), calSel = null, editId = null;
+let calMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1), calSel = null, editId = null, qLater = [];
 let data = null, tab = 'home', skipped = [], current = null, hiddenAt = 0, tick = null, wakeLock = null, faceOk = false, busy = false;
 const CRED = 'helper.cred';
 
@@ -145,6 +145,10 @@ views.home = () => {
     ${(data.checkins || []).some(c => c.date === Logic.localDay()) ? '' : `<form data-form="checkin" class="add quick checkin"><h3>Як ти сьогодні?</h3>
       <textarea name="text" rows="2" placeholder="Своїми словами: настрій, сили, сон, що на душі" required></textarea>
       <button class="primary">Записати</button></form>`}
+    ${(qs => qs.length ? `<form data-form="answer" class="add quick checkin"><h3>Питання від помічника${qs.length > 1 ? ` (ще ${qs.length - 1})` : ''}</h3>
+      <p>${esc(qs[0].q)}</p><input type="hidden" name="id" value="${qs[0].id}">
+      <textarea name="a" rows="3" placeholder="Скільки хочеш, своїми словами" required></textarea>
+      <div class="row"><button class="primary">Відповісти</button><button type="button" data-act="qLater" data-v="${qs[0].id}">Пізніше</button></div></form>` : '')((data.questions || []).filter(q => !q.a && !qLater.includes(q.id)))}
     <button class="big" data-act="next">Що мені робити?</button>
     ${c && c.kind === 'sleep' ? `<div class="card"><h2>${esc(c.title)}</h2></div>` : c ? `<div class="card"><h2>${esc(c.title)}</h2>
       ${c.minutes ? `<p class="muted">${c.minutes} хв</p>` : ''}
@@ -356,6 +360,7 @@ const acts = {
     const [id, day] = v.split('|'), t = data.tasks.find(x => x.id === id); if (!t) return;
     t.done = !t.done; t.doneAt = t.done ? (day === Logic.localDay() ? new Date().toISOString() : day + 'T12:00:00.000Z') : undefined; Logic.touch(t); await save(); render();
   },
+  qLater: v => { qLater.push(v); render(); },
   edit: v => { editId = v || null; render(); },
   timerGoal: v => { const t = timers().find(x => x.id === v), r = t && data.routines.find(x => x.id === t.ref); if (!r) return; clearInterval(tick); logTime(t); const left = r.goal * 6e4 - Logic.timeOn(data, Logic.localDay(), r.id); if (left > 0) Logic.addTime(data, Logic.localDay(), r.id, left); finishTimer(v); },
   delTask: async v => { Logic.remove(data, 'tasks', v); await save(); render(); },
@@ -390,6 +395,7 @@ const forms = {
   settings: f => { data.settings = { ...data.settings, ...f }; Chat.resetContext(); },
   addRoutine: f => data.routines.push(routineFrom(f, { id: Logic.id() })),
   saveRoutine: f => { const i = data.routines.findIndex(r => r.id === f.id); if (i >= 0) data.routines[i] = routineFrom(f, data.routines[i]); editId = null; },
+  answer: f => { const q = (data.questions || []).find(x => x.id === f.id); if (q) Object.assign(q, { a: f.a.trim(), u: Date.now() }); },
   saveTask: f => { const t = data.tasks.find(x => x.id === f.id); if (t) Object.assign(t, { u: Date.now(), title: f.title.trim(), due: f.due || null, minutes: num(f.minutes), focus: !!f.focus }); editId = null; },
 };
 $app.addEventListener('submit', async e => {
