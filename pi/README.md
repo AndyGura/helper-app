@@ -64,6 +64,8 @@ The phone should show "Тест: нагадування працюють ✓". D
 
 ## Later
 
+- **Ad-hoc push**: add an `inbox` item with `"push": "<neutral text>"` to `data/app.json`; it is sent once on the next run (≤15 min).
+
 - **Logs**: `tail ~/.helper-push.log` (on the Pi).
 - **Update code**: `cd ~/helper-app && git pull` (on the Pi).
 - **"Subscription expired" in the log**: on the phone press **Увімкнути нагадування** again.

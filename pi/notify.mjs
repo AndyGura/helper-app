@@ -18,7 +18,7 @@ if (!sub) { console.log('no push subscription in app.json yet'); process.exit(0)
 webpush.setVapidDetails(E.VAPID_SUBJECT || 'mailto:helper@example.com', E.VAPID_PUBLIC, E.VAPID_PRIVATE);
 
 let state = {}; try { state = JSON.parse(readFileSync(STATE, 'utf8')); } catch {}
-if (state.day !== today) state = { day: today, sent: [] };
+if (state.day !== today) state = { day: today, sent: [], pushed: (state.pushed || []).slice(-50) };
 
 // Reminders: [key, minute of day, condition, text]. Text stays neutral (others may see the lock screen).
 const open = (data.tasks || []).filter(t => !t.done);
@@ -32,6 +32,12 @@ const rules = [
 const send = body => webpush.sendNotification(sub, JSON.stringify({ title: 'Помічник', body, tag: 'helper' }));
 
 if (process.argv[2] === 'test') { await send('Тест: нагадування працюють ✓'); console.log('sent test'); process.exit(0); }
+// Ad-hoc pushes: inbox items with `push` (string = neutral body) are sent once, on the next run.
+state.pushed = state.pushed || [];
+for (const n of (data.inbox || []).filter(n => n.push && !state.pushed.includes(n.id))) {
+  try { await send(typeof n.push === 'string' ? n.push : 'Є нотатка від помічника'); state.pushed.push(n.id); console.log(today, 'adhoc', n.id, 'sent'); }
+  catch (e) { console.error('adhoc', n.id, e.statusCode || e.message); }
+}
 for (const [key, at, cond, text] of rules) {
   if (!cond || state.sent.includes(key) || min < at || min > at + 30) continue; // fire once, within 30 min of the slot
   try { await send(text); state.sent.push(key); console.log(today, key, 'sent'); }
