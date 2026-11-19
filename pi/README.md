@@ -68,6 +68,7 @@ The phone should show "Тест: нагадування працюють ✓". D
 
 - **Logs**: `tail ~/.helper-push.log` (on the Pi).
 - **Update code**: `cd ~/helper-app && git pull` (on the Pi).
+- **New phone**: install the app, set PIN, ⚙️ repo + token, **Синхронізувати зараз**, then **Увімкнути нагадування на цьому телефоні**. The VAPID key comes with the sync (saved with the last subscription), so no Pi access is needed. Only if the key field is empty: on the Pi `grep VAPID_PUBLIC ~/.helper-push.env`.
 - **"Subscription expired" in the log**: on the phone press **Увімкнути нагадування** again.
 - **"GitHub 401"**: token expired → make a new one (step 1), then on the Pi `nano ~/.helper-push.env`, replace `GH_TOKEN=`.
 - **Re-run setup from scratch**: `rm ~/.helper-push.env && bash setup.sh` (new keys → repeat step 4).

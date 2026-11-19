@@ -215,6 +215,8 @@ const Logic = (() => {
     }
     const lp = local.prefs, rp = remote.prefs;
     if (lp || rp) out.prefs = (lp?.u || 0) >= (rp?.u || 0) ? lp : rp;
+    const lu = local.push, ru = remote.push; // push subscription: newest device wins
+    if (lu || ru) out.push = (lu?.u || 0) >= (ru?.u || 0) ? lu : ru;
     return out;
   }
 

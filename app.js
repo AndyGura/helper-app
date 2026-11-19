@@ -341,6 +341,8 @@ views.chat = () => {
 };
 
 // ---------- Settings: backup / import ----------
+// VAPID key: typed on this device, else the one synced with the last subscription (so a new phone needs no Pi access).
+const PUSH_EP = 'pushEndpoint', vapidKey = () => (data.settings?.vapid || data.push?.vapid || '').trim();
 views.settings = () => { const s = data.settings || {}; shell(`<h1>Налаштування</h1>
   <button data-act="lock">Заблокувати</button>
   ${localStorage.getItem(CRED) ? '<button data-act="faceOff">Вимкнути Face ID</button>' : '<button data-act="faceEnable">Увімкнути Face ID</button>'}
@@ -353,9 +355,9 @@ views.settings = () => { const s = data.settings || {}; shell(`<h1>Налашт�
   <h3>Тиждень з дітьми</h3><p class="muted">Чергується щотижня. Зараз: ${Logic.isKidsWeek(data, Logic.localDay()) ? '<b>мій тиждень з дітьми</b> (план менший)' : 'звичайний тиждень'}.</p>
   <button data-act="kidsWeek">${Logic.isKidsWeek(data, Logic.localDay()) ? 'Ні, цей тиждень звичайний' : 'Цей тиждень — мій з дітьми'}</button>
   <h3>Нагадування (пуш)</h3><p class="muted">Ранок, дедлайни, час спати. Текст нейтральний. На iPhone працює лише з іконки на головному екрані. Ключ VAPID дає скрипт на Raspberry Pi.</p>
-  <form data-form="vapid"><input name="vapid" placeholder="VAPID public key" value="${esc(s.vapid)}"><button>Зберегти ключ</button></form>
-  ${vapidMsg ? `<p class="${vapidMsg.ok ? 'ok' : 'err'}">${esc(vapidMsg.text)}</p>` : s.vapid ? '<p class="muted">Ключ збережено ✓</p>' : ''}
-  <button data-act="pushOn">${data.push?.sub ? 'Пуш увімкнено ✓ (оновити)' : 'Увімкнути нагадування'}</button>
+  <form data-form="vapid"><input name="vapid" placeholder="VAPID public key" value="${esc(vapidKey())}"><button>Зберегти ключ</button></form>
+  ${vapidMsg ? `<p class="${vapidMsg.ok ? 'ok' : 'err'}">${esc(vapidMsg.text)}</p>` : vapidKey() ? '<p class="muted">Ключ є ✓</p>' : ''}
+  <button data-act="pushOn">${data.push?.sub?.endpoint && data.push.sub.endpoint === localStorage.getItem(PUSH_EP) ? 'Пуш увімкнено ✓ (оновити)' : 'Увімкнути нагадування на цьому телефоні'}</button>
   <h3>Перенесення даних</h3><p class="muted">Експорт — незашифрований JSON. Не зберігай його в спільних місцях.</p>
   <button data-act="export">Скопіювати експорт</button>
   <textarea id="imp" rows="5" placeholder="Встав JSON для імпорту"></textarea>
@@ -368,7 +370,7 @@ const acts = {
   bonus: () => next(true),
   pushOn: async () => {
     const msg = (ok, text) => { vapidMsg = { ok, text }; render(); };
-    const key = (data.settings?.vapid || '').trim(); if (!key) return msg(false, 'Спершу встав і збережи ключ VAPID.');
+    const key = vapidKey(); if (!key) return msg(false, 'Спершу встав і збережи ключ VAPID.');
     if (!('PushManager' in window)) return msg(false, 'Пуш недоступний. На iPhone відкрий застосунок з іконки на головному екрані.');
     try {
       if (await Notification.requestPermission() !== 'granted') return msg(false, 'Сповіщення не дозволені. Увімкни їх у Параметри → Сповіщення → Помічник.');
@@ -377,8 +379,8 @@ const acts = {
       const same = (x, y) => x && x.byteLength === y.byteLength && new Uint8Array(x).every((v, i) => v === y[i]);
       if (old && !same(old.options?.applicationServerKey, k)) { await old.unsubscribe(); old = null; } // key changed → resubscribe
       const sub = old || await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: k });
-      data.push = { sub: sub.toJSON(), u: Date.now() }; await save(); await syncNow(true);
-      msg(true, 'Нагадування увімкнено ✓ Через хвилину запусти тест на Pi (крок 5 інструкції).');
+      data.push = { sub: sub.toJSON(), vapid: key, u: Date.now() }; localStorage.setItem(PUSH_EP, sub.endpoint); await save(); await syncNow(true);
+      msg(true, 'Нагадування увімкнено ✓ (на Pi можна запустити тест, крок 5 інструкції).');
     } catch (e) { msg(false, 'Не вдалося увімкнути: ' + e.message); }
   },
 
