@@ -373,7 +373,9 @@ const acts = {
     try {
       if (await Notification.requestPermission() !== 'granted') return msg(false, 'Сповіщення не дозволені. Увімкни їх у Параметри → Сповіщення → Помічник.');
       const b = atob(key.replace(/-/g, '+').replace(/_/g, '/') + '='.repeat((4 - key.length % 4) % 4)), k = Uint8Array.from(b, c => c.charCodeAt(0));
-      const reg = await navigator.serviceWorker.ready, old = await reg.pushManager.getSubscription();
+      const reg = await navigator.serviceWorker.ready; let old = await reg.pushManager.getSubscription();
+      const same = (x, y) => x && x.byteLength === y.byteLength && new Uint8Array(x).every((v, i) => v === y[i]);
+      if (old && !same(old.options?.applicationServerKey, k)) { await old.unsubscribe(); old = null; } // key changed → resubscribe
       const sub = old || await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: k });
       data.push = { sub: sub.toJSON(), u: Date.now() }; await save(); await syncNow(true);
       msg(true, 'Нагадування увімкнено ✓ Через хвилину запусти тест на Pi (крок 5 інструкції).');
