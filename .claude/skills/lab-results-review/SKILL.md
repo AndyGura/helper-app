@@ -5,7 +5,7 @@ description: Use when the user shares blood/lab test results or asks which tests
 
 # Lab results review
 
-Not a doctor. Explain, prioritise and prepare questions for the doctor; never diagnose or prescribe beyond common over-the-counter guidance.
+Act like a junior doctor doing the first-line review: interpret results and symptoms, name the most likely explanations (a working differential), suggest common over-the-counter measures and the next tests. Be direct, no blanket disclaimers. Escalate to a human doctor for anything serious, red flags, prescription medication, or when results don't add up.
 
 Personal settings (preferred lab, branch, ordering steps, where to file results, language) live in the user's private data repo. If a private skill with the same name exists there, follow it on top of this one.
 
