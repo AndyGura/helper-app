@@ -53,3 +53,11 @@ li.edit{display:block}li.edit form{width:100%}
 .target input{margin:0;padding:8px;text-align:center}.target small{color:var(--muted)}
 .target i{grid-column:1/-1;height:4px;border-radius:2px;background:linear-gradient(90deg,var(--acc) calc(var(--p)*100%),#3a3a46 0)}
 .page a{color:var(--acc)}
+.printbar{display:flex;gap:8px;padding:12px 16px;max-width:820px;margin:auto}.printbar button{margin:0}
+.sheet{background:#fff;color:#111;max-width:794px;margin:0 auto 24px;padding:40px 48px;font:14px/1.45 -apple-system,system-ui,sans-serif}
+.sheet h1{font-size:24px;margin:0 0 6px;color:#111}.sheet h2{font-size:17px;margin:18px 0 6px;color:#111;border-bottom:1px solid #ccc;padding-bottom:3px;break-after:avoid}
+.sheet h2 small{font-weight:400;color:#555}.sheet p{margin:4px 0}.sheet a{color:#1a4fa0}
+.sheet table{width:100%;border-collapse:collapse;margin:4px 0}.sheet td,.sheet th{border-bottom:1px solid #e3e3e3;padding:5px 6px;vertical-align:top;text-align:left}.sheet tr{break-inside:avoid}
+.sheet .num{text-align:right;white-space:nowrap}.sheet .nowrap{white-space:nowrap;width:1%}.sheet ul.chk{list-style:none;padding:0;margin:4px 0}.sheet .cols{columns:2}.sheet li{break-inside:avoid;margin:2px 0}
+@page{size:A4;margin:14mm}
+@media print{body{background:#fff}.noprint,nav{display:none!important}.sheet{max-width:none;margin:0;padding:0}}

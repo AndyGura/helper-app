@@ -280,8 +280,37 @@ views.plan = () => {
       <p class="muted">До екзамену: ${avg}% · онови цифри після тесту</p>
       ${ts.map((t, i) => `<div class="target"><span>${esc(t.name)}</span><input name="t${i}" type="number" step="any" min="0" value="${t.now ?? ''}" placeholder="?"><small>/ ${t.goal} ${esc(t.unit || '')}</small>
         <i style="--p:${pct(t)}"></i></div>`).join('')}
-      <button class="primary">Зберегти результати</button></form>`; }).join('') || '<p class="muted">Поки немає довгих цілей.</p>'}`);
+      <button class="primary">Зберегти результати</button></form><button data-act="printPlan" data-v="${p.id}">📄 PDF / друк плану</button>`; }).join('') || '<p class="muted">Поки немає довгих цілей.</p>'}`);
 };
+
+// ---------- Print / PDF: a clean white A4 sheet with ONLY the given content (shareable, fridge-friendly). ----------
+// Uses the system print dialog → "Save as PDF" / share. No app chrome, no other data on the sheet.
+let printing = null;
+const plink = t => esc(t).replace(/https?:\/\/[^\s<]+/g, u => `<a href="${u}">${u.replace(/^https?:\/\/(www\.)?/, '').slice(0, 60)}</a>`).replace(/\n/g, '<br>');
+const WD = ['Нд', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'], ddm = d => d ? `${+d.slice(8)}.${d.slice(5, 7)}` : '';
+function printDoc(title, html) { printing = { title, html, back: tab }; tab = 'print'; render(); }
+views.print = () => {
+  if (!printing) { tab = 'home'; return render(); }
+  $app.innerHTML = `<div class="noprint printbar"><button data-act="printBack">‹ Назад</button><button class="primary" data-act="printGo">Зберегти PDF / друк</button></div>
+    <article class="sheet"><h1>${esc(printing.title)}</h1>${printing.html}</article>`;
+};
+function tripPrint(t) {
+  const cur = esc(t.currency || ''), sum = (t.budget || []).reduce((a, b) => a + (+b.sum || 0), 0), ch = (t.options || []).find(o => o.id === t.chosen);
+  const tasks = (t.taskIds || []).map(id => data.tasks.find(x => x.id === id)).filter(Boolean);
+  return `<p>${t.from ? `<b>${ddm(t.from)}${t.to ? '–' + ddm(t.to) : ''}</b> · ` : ''}${TRIP[t.status] || ''}</p>${t.note ? `<p>${plink(t.note)}</p>` : ''}
+    ${(t.options || []).length ? `<h2>${ch ? 'Обраний варіант' : 'Варіанти'}</h2><table>${(ch ? [ch] : t.options).map(o => `<tr><td><b>${esc(o.title || '')}</b>${o.note ? `<br>${plink(o.note)}` : ''}${o.link ? `<br>${plink(o.link)}` : ''}</td><td>${esc(o.dates || '')}</td><td class="num">${o.budget ? o.budget + ' ' + cur : ''}</td></tr>`).join('')}</table>` : ''}
+    ${t.route ? `<h2>Дорога</h2><p>${plink(t.route)}</p>` : ''}${t.stay ? `<h2>Житло</h2><p>${plink(t.stay)}</p>` : ''}
+    ${(t.days || []).length ? `<h2>По днях</h2><table>${t.days.map(d => `<tr><td class="nowrap"><b>${d.date ? WD[new Date(d.date + 'T12:00:00').getDay()] + ' ' + ddm(d.date) : ''}</b>${d.title ? `<br>${esc(d.title)}` : ''}</td><td>${(d.items || []).map(plink).join('<br>')}</td></tr>`).join('')}</table>` : ''}
+    ${(t.budget || []).length ? `<h2>Бюджет</h2><table>${t.budget.map(b => `<tr><td>${esc(b.item)}${b.paid ? ' ✓' : ''}</td><td class="num">${b.sum ?? '?'} ${cur}</td></tr>`).join('')}<tr><td><b>Разом</b></td><td class="num"><b>${sum} ${cur}</b></td></tr></table>` : ''}
+    ${tasks.length ? `<h2>Що зробити</h2><ul class="chk">${tasks.map(x => `<li>${x.done ? '☑' : '☐'} ${esc(x.title)}${x.due ? ` — до ${ddm(x.due)}` : ''}</li>`).join('')}</ul>` : ''}
+    ${(t.packing || []).length ? `<h2>Речі</h2><ul class="chk cols">${t.packing.map(i => `<li>☐ ${esc(i.t)}</li>`).join('')}</ul>` : ''}`;
+}
+function planPrint(p) {
+  const days = x => x.days ? x.days.map(d => WD[d]).join(', ') : 'щодня';
+  return `${p.note ? `<p>${plink(p.note)}</p>` : ''}${(p.stages || []).map((s, i) => `<h2>${i + 1}. ${esc(s.name)} <small>${ddm(s.from)}–${ddm(s.to)}</small></h2>${s.goal ? `<p>${esc(s.goal)}</p>` : ''}
+    ${(s.home || []).length ? `<table>${s.home.map(x => `<tr><td>${plink(x.t)}</td><td class="nowrap">${days(x)}${x.from || x.to ? `<br><small>${x.from ? 'з ' + ddm(x.from) : ''} ${x.to ? 'до ' + ddm(x.to) : ''}</small>` : ''}</td></tr>`).join('')}</table>` : ''}`).join('')}
+    ${(p.targets || []).length ? `<h2>Цілі</h2><table><tr><th>Вправа</th><th class="num">Зараз</th><th class="num">Ціль</th></tr>${p.targets.map(t => `<tr><td>${esc(t.name)}</td><td class="num">${t.now ?? '—'}</td><td class="num">${t.goal} ${esc(t.unit || '')}</td></tr>`).join('')}</table>` : ''}`;
+}
 
 // ---------- Trip plan: options → chosen, route/stay, day-by-day, budget, packing, linked tasks ----------
 const TRIP = { idea: '💡 ідея', choosing: '🤔 вибираємо', booked: '✅ заброньовано', done: '🏁 минула' };
@@ -300,6 +329,7 @@ views.trip = () => {
     ${(t.budget || []).length ? `<h3>Бюджет: ${sum} ${esc(cur)}</h3><ul class="list">${t.budget.map(b => `<li class="${b.paid ? 'done' : ''}"><div><b>${esc(b.item)}</b>${b.paid ? '<small>оплачено</small>' : ''}</div><span>${b.sum ?? '?'} ${esc(cur)}</span></li>`).join('')}</ul>` : ''}
     ${tasks.length ? `<h3>Справи</h3><ul class="list">${tasks.map(x => `<li class="${x.done ? 'done' : ''}" data-act="toggleTaskDone" data-v="${x.id}|${Logic.localDay()}"><span class="box"></span><div><b>${esc(x.title)}</b>${x.due ? `<small>до ${dm(x.due)}</small>` : ''}</div></li>`).join('')}</ul>` : ''}
     ${pk.length ? `<h3>Речі (${pk.filter(i => i.done).length}/${pk.length})</h3><ul class="list">${pk.map(i => `<li class="${i.done ? 'done' : ''}" data-act="packTog" data-v="${t.id}|${i.id}"><span class="box"></span><div><b>${esc(i.t)}</b></div></li>`).join('')}</ul>` : ''}
+    <button data-act="printTrip" data-v="${t.id}">📄 PDF / друк</button>
     <form data-form="packAdd" class="add"><input type="hidden" name="id" value="${t.id}"><div class="row"><input name="t" placeholder="Додати річ" required><button class="primary" style="flex:0 0 64px">+</button></div></form>`);
 };
 
@@ -425,6 +455,10 @@ const acts = {
   timerStop: async v => { data.timers = timers().filter(x => x.id !== v); await save(); render(); },
   timerPause: async v => { const t = timers().find(x => x.id === v); logTime(t); t.acc = elapsed(t); t.run = null; await save(); render(); },
   timerResume: async v => { for (const t of timers()) if (t.run) { logTime(t); t.acc = elapsed(t); t.run = null; } timers().find(x => x.id === v).run = Date.now(); await save(); render(); },
+  printTrip: v => { const t = data.trips.find(x => x.id === v); if (t) printDoc(t.title, tripPrint(t)); },
+  printPlan: v => { const p = data.plans.find(x => x.id === v); if (p) printDoc(p.title, planPrint(p)); },
+  printBack: () => { tab = printing?.back || 'home'; printing = null; render(); },
+  printGo: () => { const old = document.title; document.title = printing.title; window.print(); setTimeout(() => { document.title = old; }, 1000); },
   trip: v => { tripId = v; tab = 'trip'; render(); },
   packTog: async v => { const [tid, iid] = v.split('|'), t = (data.trips || []).find(x => x.id === tid), i = t?.packing?.find(x => x.id === iid); if (!i) return;
     i.done = !i.done; Logic.touch(t); await save(); render(); },
