@@ -8,7 +8,7 @@ let calMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1), cal
 let vapidMsg = null, data = null, tab = 'home', skipped = [], current = null, hiddenAt = 0, tick = null, wakeLock = null, faceOk = false, busy = false;
 const CRED = 'helper.cred';
 
-const save = async () => { await Vault.save(data); Sync.schedule(data, async () => { await Vault.save(data); render(); }); };
+const save = async () => { Logic.rollMonthly(data); await Vault.save(data); Sync.schedule(data, async () => { await Vault.save(data); render(); }); };
 async function syncNow(quiet = true) {
   try { if (await Sync.sync(data)) { await Vault.save(data); render(); } if (!quiet) alert('Синхронізовано'); }
   catch (e) { if (!quiet) alert('Помилка синхронізації: ' + e.message); }
@@ -223,7 +223,7 @@ views.tasks = () => {
   const open = data.tasks.filter(t => !t.done).sort((a, b) => (a.due || '9') < (b.due || '9') ? -1 : 1);
   const today = Logic.doneSet(data, Logic.localDay());
   const taskLi = t => t.id === editId ? `<li class="edit">${taskFormHtml(t)}</li>` : `<li data-act="toggleTask" data-v="${t.id}"><span class="box"></span>
-      <div><b>${t.focus ? '★ ' : ''}${esc(t.title)}</b><small>${[t.due, t.minutes && t.minutes + ' хв'].filter(Boolean).join(' · ')}</small>${t.link ? `<small class="note">${linkify(t.link)}</small>` : ''}</div>
+      <div><b>${t.focus ? '★ ' : ''}${esc(t.title)}</b><small>${[t.due, t.monthly && `щомісяця ${t.monthly}-го`, t.minutes && t.minutes + ' хв'].filter(Boolean).join(' · ')}</small>${t.link ? `<small class="note">${linkify(t.link)}</small>` : ''}</div>
       <button class="x" data-act="edit" data-v="${t.id}">✎</button><button class="x" data-act="delTask" data-v="${t.id}">✕</button></li>`;
   const top = open.slice(0, 3), later = open.slice(3);
   const routineLi = routineLiFactory(today);
@@ -241,6 +241,7 @@ function taskFormHtml(t) { const v = k => t?.[k] != null ? `value="${esc(String(
     <form data-form="${t ? 'saveTask' : 'addTask'}" class="add">${t ? `<input type="hidden" name="id" value="${t.id}">` : ''}
       <input name="title" placeholder="Нова справа" required ${v('title')}>
       <div class="row"><input name="due" type="date" ${v('due')}><input name="minutes" type="number" min="1" placeholder="хв" ${v('minutes')}></div>
+      <input name="monthly" type="number" min="1" max="31" placeholder="Щомісяця, число (необов'язково)" ${v('monthly')}>
       <label><input name="focus" type="checkbox" ${t?.focus ? 'checked' : ''}> Фокус ★</label>
       <button class="primary">${t ? 'Зберегти' : 'Додати'}</button>${t ? '<button type="button" data-act="edit" data-v="">Скасувати</button>' : ''}</form>`; }
 function routineLiFactory(today) { return r => r.id === editId ? `<li class="edit">${routineFormHtml(r)}</li>` : `<li class="${today.has(r.id) ? 'done' : ''}" data-act="toggleRoutine" data-v="${Logic.localDay()}|${r.id}"><span class="box"></span>
@@ -367,7 +368,7 @@ views.settings = () => { const s = data.settings || {}; shell(`<h1>Налашт�
 // ---------- Events ----------
 const acts = {
   key: v => { const el = document.getElementById('pin'); el.value = v === 'back' ? el.value.slice(0, -1) : (el.value + v).slice(0, 6); },
-  bonus: () => next(true),
+  bonus: () => { skipped = []; next(true); }, // declined items come back in bonus mode
   pushOn: async () => {
     const msg = (ok, text) => { vapidMsg = { ok, text }; render(); };
     const key = vapidKey(); if (!key) return msg(false, 'Спершу встав і збережи ключ VAPID.');
@@ -444,7 +445,7 @@ const forms = {
   checkin: f => (data.checkins = data.checkins || []).push({ u: Date.now(), id: Logic.id(), date: Logic.localDay(), text: f.text.trim() }),
   memo: f => (data.memos = data.memos || []).push({ u: Date.now(), id: Logic.id(), text: f.text.trim(), date: new Date().toISOString() }),
   addShop: f => data.shopping.push({ u: Date.now(), id: Logic.id(), store: f.store.trim() || f.storeSel || 'Інше', text: f.text.trim(), note: f.note.trim(), done: false }),
-  addTask: f => data.tasks.push({ u: Date.now(), id: Logic.id(), title: f.title.trim(), due: f.due || null, minutes: num(f.minutes), focus: !!f.focus, done: false }),
+  addTask: f => data.tasks.push({ u: Date.now(), id: Logic.id(), title: f.title.trim(), ...monthlyFields(f), minutes: num(f.minutes), focus: !!f.focus, done: false }),
   settings: f => { data.settings = { ...data.settings, ...f }; Chat.resetContext(); },
   addRoutine: f => data.routines.push(routineFrom(f, { id: Logic.id() })),
   saveRoutine: f => { const i = data.routines.findIndex(r => r.id === f.id); if (i >= 0) data.routines[i] = routineFrom(f, data.routines[i]); editId = null; },
@@ -455,8 +456,13 @@ const forms = {
     let ok = false; try { const b = atob(k.replace(/-/g, '+').replace(/_/g, '/') + '='.repeat((4 - k.length % 4) % 4)); ok = b.length === 65 && b.charCodeAt(0) === 4; } catch {}
     if (!ok) { vapidMsg = { ok: false, text: 'Це не схоже на ключ VAPID. Скопіюй увесь рядок Public key з Pi (≈87 символів).' }; return; }
     data.settings = { ...data.settings, vapid: k }; vapidMsg = { ok: true, text: 'Ключ збережено ✓ Тепер натисни «Увімкнути нагадування».' }; },
-  saveTask: f => { const t = data.tasks.find(x => x.id === f.id); if (t) Object.assign(t, { u: Date.now(), title: f.title.trim(), due: f.due || null, minutes: num(f.minutes), focus: !!f.focus }); editId = null; },
+  saveTask: f => { const t = data.tasks.find(x => x.id === f.id); if (t) Object.assign(t, { u: Date.now(), title: f.title.trim(), ...monthlyFields(f), minutes: num(f.minutes), focus: !!f.focus }); editId = null; },
 };
+// Monthly day (1–31) without a date → due on the next such day (today counts).
+function monthlyFields(f) { const m = Math.min(31, Math.max(0, Math.round(num(f.monthly) || 0))) || undefined;
+  const yest = Logic.localDay(new Date(Date.now() - 864e5));
+  const due = f.due || (m ? Logic.monthlyDue(m, yest) : null);
+  return { monthly: m, due, from: m ? due : undefined }; }
 $app.addEventListener('submit', async e => {
   e.preventDefault();
   if (e.target.dataset.form === 'timer') {

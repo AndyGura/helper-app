@@ -15,7 +15,7 @@ const Logic = (() => {
     const late = h >= 22 || h < 4;
     const out = [];
     for (const t of data.tasks) {
-      if (t.done) continue;
+      if (t.done || (t.from && t.from > today)) continue; // `from`: hidden from "what next" until then
       let s = 10;
       if (t.due) {
         const d = daysBetween(today, t.due);
@@ -227,6 +227,25 @@ const Logic = (() => {
     const wd = new Date(day + 'T12:00:00').getDay();
     return { i, stage: s, items: s ? (s.home || []).filter(x => (!x.days || x.days.includes(wd)) && (!x.to || day <= x.to) && (!x.from || day >= x.from)) : [] };
   }
+  // Monthly tasks: t.monthly = day of month (1–31, clamped to month length). When one is done, the next
+  // month's copy appears, due on that day; suggested from `lead` days before (default 0 = from that day).
+  // Until done it stays overdue, so the morning push and the home screen keep reminding daily. Deterministic id → no duplicates across devices.
+  function monthlyDue(dom, after) { // first date with that day-of-month strictly after `after` (YYYY-MM-DD)
+    let [y, m] = after.split('-').map(Number);
+    for (;;) { const k = `${y}-${String(m).padStart(2, '0')}-${String(Math.min(dom, new Date(y, m, 0).getDate())).padStart(2, '0')}`;
+      if (k > after) return k; if (++m > 12) { m = 1; y++; } }
+  }
+  function rollMonthly(data, now = Date.now()) {
+    for (const t of [...data.tasks]) {
+      if (!t.monthly || !t.done || t.next) continue;
+      const base = t.due || (t.doneAt || new Date(now).toISOString()).slice(0, 10), due = monthlyDue(t.monthly, base);
+      const series = t.series || t.id, nid = `${series}_${due.slice(0, 7).replace('-', '')}`;
+      const from = localDay(new Date(Date.parse(due + 'T12:00:00') - (t.lead || 0) * 864e5));
+      if (!data.tasks.some(x => x.id === nid) && !data.deleted?.[nid])
+        data.tasks.push({ ...t, id: nid, series, due, from, done: false, doneAt: undefined, next: undefined, u: +now });
+      t.next = nid; t.u = +now;
+    }
+  }
   const id = () => Math.random().toString(36).slice(2, 10);
   // "Помічено": up to 2 short rule-based observations for the home screen (zero tokens).
   // Overdue / due-soon tasks, a must-do habit missed 3 scheduled days in a row, a good streak worth praising.
@@ -249,6 +268,6 @@ const Logic = (() => {
     return out.slice(0, 2);
   }
 
-  return { planNow, weekDays, noticed, isKidsWeek, dailyCap, dayPlan, weekCount, sinceLast, dueEvery, streak, coveredAhead, appliesOn, offOn, setOff, addTime, timeOn, doneSet, setRoutine, empty, candidates, pickNext, markDone, pruneShopping, localDay, id, touch, remove, merge, COLLECTIONS };
+  return { monthlyDue, rollMonthly, planNow, weekDays, noticed, isKidsWeek, dailyCap, dayPlan, weekCount, sinceLast, dueEvery, streak, coveredAhead, appliesOn, offOn, setOff, addTime, timeOn, doneSet, setRoutine, empty, candidates, pickNext, markDone, pruneShopping, localDay, id, touch, remove, merge, COLLECTIONS };
 })();
 if (typeof module !== 'undefined') module.exports = Logic;
