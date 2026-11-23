@@ -61,3 +61,4 @@ li.edit{display:block}li.edit form{width:100%}
 .sheet .num{text-align:right;white-space:nowrap}.sheet .nowrap{white-space:nowrap;width:1%}.sheet ul.chk{list-style:none;padding:0;margin:4px 0}.sheet .cols{columns:2}.sheet li{break-inside:avoid;margin:2px 0}
 @page{size:A4;margin:14mm}
 @media print{body{background:#fff}.noprint,nav{display:none!important}.sheet{max-width:none;margin:0;padding:0}}
+button:active:not(:disabled),.btn:active{filter:brightness(.8);transform:scale(.97)}button{transition:transform .08s,filter .08s}button:disabled{opacity:.6}

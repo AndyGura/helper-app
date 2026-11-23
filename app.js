@@ -288,6 +288,22 @@ views.plan = () => {
 let printing = null;
 const plink = t => esc(t).replace(/https?:\/\/[^\s<]+/g, u => `<a href="${u}">${u.replace(/^https?:\/\/(www\.)?/, '').slice(0, 60)}</a>`).replace(/\n/g, '<br>');
 const WD = ['Нд', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'], ddm = d => d ? `${+d.slice(8)}.${d.slice(5, 7)}` : '';
+// Self-hosted html2pdf (vendor/, MIT), loaded only on demand. Text becomes an image: fine for sharing and printing.
+const loadPdfLib = () => window.html2pdf ? Promise.resolve() : new Promise((ok, no) => { const sc = document.createElement('script'); sc.src = 'vendor/html2pdf.bundle.min.js'; sc.onload = ok; sc.onerror = () => no(new Error('бібліотека PDF не завантажилась')); document.head.appendChild(sc); });
+async function pdfShare(title, el) {
+  await loadPdfLib();
+  const box = document.createElement('div'), cl = el.cloneNode(true); // fixed A4 text width, independent of the phone screen
+  box.style.cssText = 'position:fixed;left:-10000px;top:0'; cl.style.cssText = 'width:700px;max-width:none;margin:0;padding:0'; box.appendChild(cl); document.body.appendChild(box);
+  try { return await pdfMake(title, cl); } finally { box.remove(); }
+}
+async function pdfMake(title, el) {
+  const name = title.replace(/[\\/:*?"<>|]+/g, ' ').trim() + '.pdf';
+  const blob = await html2pdf().set({ margin: 12, image: { type: 'jpeg', quality: 0.95 }, html2canvas: { scale: 2, backgroundColor: '#fff' },
+    jsPDF: { unit: 'mm', format: 'a4' }, pagebreak: { mode: ['css', 'legacy'], avoid: ['tr', 'h2', 'li', 'p'] } }).from(el).outputPdf('blob');
+  const file = new File([blob], name, { type: 'application/pdf' });
+  if (navigator.canShare?.({ files: [file] })) return navigator.share({ files: [file], title });
+  const a = document.createElement('a'); a.href = URL.createObjectURL(file); a.download = name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 6e4);
+}
 function printDoc(title, html) { printing = { title, html, back: tab }; tab = 'print'; render(); }
 views.print = () => {
   if (!printing) { tab = 'home'; return render(); }
@@ -458,7 +474,12 @@ const acts = {
   printTrip: v => { const t = data.trips.find(x => x.id === v); if (t) printDoc(t.title, tripPrint(t)); },
   printPlan: v => { const p = data.plans.find(x => x.id === v); if (p) printDoc(p.title, planPrint(p)); },
   printBack: () => { tab = printing?.back || 'home'; printing = null; render(); },
-  printGo: () => { const old = document.title; document.title = printing.title; window.print(); setTimeout(() => { document.title = old; }, 1000); },
+  printGo: async () => { // iOS home-screen apps ignore window.print → build a real PDF and open the share sheet.
+    const standalone = navigator.standalone || matchMedia('(display-mode: standalone)').matches;
+    if (!standalone) { const old = document.title; document.title = printing.title; window.print(); setTimeout(() => { document.title = old; }, 1000); return; }
+    const btn = document.querySelector('[data-act=printGo]'); btn.disabled = true; btn.textContent = 'Готую PDF…';
+    try { await pdfShare(printing.title, document.querySelector('.sheet')); } catch (e) { if (e.name !== 'AbortError') alert('Не вдалося: ' + e.message); }
+    btn.disabled = false; btn.textContent = 'Зберегти PDF / друк'; },
   trip: v => { tripId = v; tab = 'trip'; render(); },
   packTog: async v => { const [tid, iid] = v.split('|'), t = (data.trips || []).find(x => x.id === tid), i = t?.packing?.find(x => x.id === iid); if (!i) return;
     i.done = !i.done; Logic.touch(t); await save(); render(); },

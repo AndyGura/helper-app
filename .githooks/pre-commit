@@ -1,7 +1,8 @@
 #!/bin/sh
+# vendor/ = unmodified third-party libraries, skipped (their code has false positives).
 # Blocks commits that add words listed in the local, untracked .private-words file.
 f="$(git rev-parse --show-toplevel)/.private-words"
 [ -s "$f" ] || exit 0
-if git diff --cached -U0 | grep '^+' | grep -v '^+++' | grep -i -E -f "$f"; then
+if git diff --cached -U0 -- . ':!vendor' | grep '^+' | grep -v '^+++' | grep -i -E -f "$f"; then
   echo "pre-commit: personal data found (see .private-words). Remove it." >&2; exit 1
 fi
