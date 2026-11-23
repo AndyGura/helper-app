@@ -52,3 +52,4 @@ li.edit{display:block}li.edit form{width:100%}
 .target{display:grid;grid-template-columns:1fr 72px 70px;gap:6px;align-items:center;font-size:15px;margin:4px 0}
 .target input{margin:0;padding:8px;text-align:center}.target small{color:var(--muted)}
 .target i{grid-column:1/-1;height:4px;border-radius:2px;background:linear-gradient(90deg,var(--acc) calc(var(--p)*100%),#3a3a46 0)}
+.page a{color:var(--acc)}

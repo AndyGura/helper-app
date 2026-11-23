@@ -263,7 +263,10 @@ function routineFormHtml(r) { const v = k => r?.[k] != null ? `value="${r[k]}"` 
 // ---------- Plans: long-term goals (exam prep), stages + progress vs targets ----------
 views.plan = () => {
   const ps = data.plans || [], today = Logic.localDay(), dm = d => `${+d.slice(8)}.${d.slice(5, 7)}`;
-  shell(`<h1>Цілі</h1>${ps.map(p => { const n = Logic.planNow(p, today), st = p.stages || [], ts = p.targets || [];
+  const tr = (data.trips || []).filter(t => t.status !== 'done'), old = (data.trips || []).filter(t => t.status === 'done');
+  const tripLi = t => `<li data-act="trip" data-v="${t.id}"><div><b>${esc(t.title)}</b><small>${[TRIP[t.status], t.from && dm(t.from) + (t.to ? '–' + dm(t.to) : '')].filter(Boolean).join(' · ')}</small></div><span>›</span></li>`;
+  shell(`${tr.length || old.length ? `<h1>Подорожі</h1><ul class="list">${tr.map(tripLi).join('')}</ul>${old.length ? `<details><summary>Минулі (${old.length})</summary><ul class="list">${old.map(tripLi).join('')}</ul></details>` : ''}` : ''}
+    <h1>Цілі</h1>${ps.map(p => { const n = Logic.planNow(p, today), st = p.stages || [], ts = p.targets || [];
     const pct = t => t.now == null ? 0 : Math.min(1, t.now / t.goal);
     const avg = ts.length ? Math.round(100 * ts.reduce((a, t) => a + pct(t), 0) / ts.length) : 0;
     return `<h3>${esc(p.title)}</h3>${p.note ? `<p class="muted">${esc(p.note)}</p>` : ''}
@@ -278,6 +281,26 @@ views.plan = () => {
       ${ts.map((t, i) => `<div class="target"><span>${esc(t.name)}</span><input name="t${i}" type="number" step="any" min="0" value="${t.now ?? ''}" placeholder="?"><small>/ ${t.goal} ${esc(t.unit || '')}</small>
         <i style="--p:${pct(t)}"></i></div>`).join('')}
       <button class="primary">Зберегти результати</button></form>`; }).join('') || '<p class="muted">Поки немає довгих цілей.</p>'}`);
+};
+
+// ---------- Trip plan: options → chosen, route/stay, day-by-day, budget, packing, linked tasks ----------
+const TRIP = { idea: '💡 ідея', choosing: '🤔 вибираємо', booked: '✅ заброньовано', done: '🏁 минула' };
+let tripId = null;
+views.trip = () => {
+  const t = (data.trips || []).find(x => x.id === tripId); if (!t) { tab = 'plan'; return views.plan(); }
+  const dm = d => d ? `${+d.slice(8)}.${d.slice(5, 7)}` : '', cur = t.currency || '', sum = (t.budget || []).reduce((a, b) => a + (+b.sum || 0), 0);
+  const tasks = (t.taskIds || []).map(id => data.tasks.find(x => x.id === id)).filter(Boolean), pk = t.packing || [];
+  const wd = d => ['Нд', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'][new Date(d + 'T12:00:00').getDay()];
+  shell(`<div class="row cal-head"><button data-act="tab" data-v="plan">‹</button><h1>${esc(t.title)}</h1></div>
+    <p>${TRIP[t.status] || ''}${t.from ? ` · ${dm(t.from)}${t.to ? '–' + dm(t.to) : ''}` : ''}</p>${t.note ? `<p class="muted">${linkify(t.note)}</p>` : ''}
+    ${(t.options || []).length ? `<h3>Варіанти</h3><ul class="list">${t.options.map(o => `<li class="${t.chosen && t.chosen !== o.id ? 'done' : ''}"><div><b>${t.chosen === o.id ? '✓ ' : ''}${esc(o.title || o.dates || '')}</b>
+      <small>${[o.dates && o.title ? o.dates : '', o.budget && o.budget + ' ' + cur].filter(Boolean).map(esc).join(' · ')}</small>${o.note ? `<small>${linkify(o.note)}</small>` : ''}${o.link ? `<small class="note">${linkify(o.link)}</small>` : ''}</div></li>`).join('')}</ul>` : ''}
+    ${t.route || t.stay ? `<h3>Дорога і житло</h3>${t.route ? `<p>🚗 ${linkify(t.route)}</p>` : ''}${t.stay ? `<p>🏠 ${linkify(t.stay)}</p>` : ''}` : ''}
+    ${(t.days || []).length ? `<h3>По днях</h3>${t.days.map(d => `<p><b>${d.date ? `${wd(d.date)} ${dm(d.date)}` : esc(d.title || '')}</b>${d.date && d.title ? ' · ' + esc(d.title) : ''}</p><ul class="hint">${(d.items || []).map(i => `<li>${linkify(i)}</li>`).join('')}</ul>`).join('')}` : ''}
+    ${(t.budget || []).length ? `<h3>Бюджет: ${sum} ${esc(cur)}</h3><ul class="list">${t.budget.map(b => `<li class="${b.paid ? 'done' : ''}"><div><b>${esc(b.item)}</b>${b.paid ? '<small>оплачено</small>' : ''}</div><span>${b.sum ?? '?'} ${esc(cur)}</span></li>`).join('')}</ul>` : ''}
+    ${tasks.length ? `<h3>Справи</h3><ul class="list">${tasks.map(x => `<li class="${x.done ? 'done' : ''}" data-act="toggleTaskDone" data-v="${x.id}|${Logic.localDay()}"><span class="box"></span><div><b>${esc(x.title)}</b>${x.due ? `<small>до ${dm(x.due)}</small>` : ''}</div></li>`).join('')}</ul>` : ''}
+    ${pk.length ? `<h3>Речі (${pk.filter(i => i.done).length}/${pk.length})</h3><ul class="list">${pk.map(i => `<li class="${i.done ? 'done' : ''}" data-act="packTog" data-v="${t.id}|${i.id}"><span class="box"></span><div><b>${esc(i.t)}</b></div></li>`).join('')}</ul>` : ''}
+    <form data-form="packAdd" class="add"><input type="hidden" name="id" value="${t.id}"><div class="row"><input name="t" placeholder="Додати річ" required><button class="primary" style="flex:0 0 64px">+</button></div></form>`);
 };
 
 // ---------- Calendar: habit marks + tasks by due date ----------
@@ -402,6 +425,9 @@ const acts = {
   timerStop: async v => { data.timers = timers().filter(x => x.id !== v); await save(); render(); },
   timerPause: async v => { const t = timers().find(x => x.id === v); logTime(t); t.acc = elapsed(t); t.run = null; await save(); render(); },
   timerResume: async v => { for (const t of timers()) if (t.run) { logTime(t); t.acc = elapsed(t); t.run = null; } timers().find(x => x.id === v).run = Date.now(); await save(); render(); },
+  trip: v => { tripId = v; tab = 'trip'; render(); },
+  packTog: async v => { const [tid, iid] = v.split('|'), t = (data.trips || []).find(x => x.id === tid), i = t?.packing?.find(x => x.id === iid); if (!i) return;
+    i.done = !i.done; Logic.touch(t); await save(); render(); },
   toggleShop: async v => { const i = data.shopping.find(x => x.id === v); i.done = !i.done; i.doneAt = new Date().toISOString(); Logic.touch(i); await save(); render(); },
   toggleTask: async v => { Logic.markDone(data, { kind: 'task', id: v }); await save(); render(); },
   dismissMemo: async v => { Logic.remove(data, 'memos', v); await save(); render(); },
@@ -445,6 +471,7 @@ const forms = {
   checkin: f => (data.checkins = data.checkins || []).push({ u: Date.now(), id: Logic.id(), date: Logic.localDay(), text: f.text.trim() }),
   memo: f => (data.memos = data.memos || []).push({ u: Date.now(), id: Logic.id(), text: f.text.trim(), date: new Date().toISOString() }),
   addShop: f => data.shopping.push({ u: Date.now(), id: Logic.id(), store: f.store.trim() || f.storeSel || 'Інше', text: f.text.trim(), note: f.note.trim(), done: false }),
+  packAdd: f => { const t = (data.trips || []).find(x => x.id === f.id); if (!t) return; (t.packing = t.packing || []).push({ id: Logic.id(), t: f.t.trim(), done: false }); Logic.touch(t); },
   addTask: f => data.tasks.push({ u: Date.now(), id: Logic.id(), title: f.title.trim(), ...monthlyFields(f), minutes: num(f.minutes), focus: !!f.focus, done: false }),
   settings: f => { data.settings = { ...data.settings, ...f }; Chat.resetContext(); },
   addRoutine: f => data.routines.push(routineFrom(f, { id: Logic.id() })),
