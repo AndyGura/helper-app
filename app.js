@@ -304,19 +304,27 @@ async function pdfMake(title, el) {
   if (navigator.canShare?.({ files: [file] })) return navigator.share({ files: [file], title });
   const a = document.createElement('a'); a.href = URL.createObjectURL(file); a.download = name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 6e4);
 }
-function printDoc(title, html) { printing = { title, html, back: tab }; tab = 'print'; render(); }
+// Shareable copy: any object with `private: true` (option, day, day item {t}, budget row, packing item, task, stage item…)
+// is dropped; `privateNote` fields are never printed. Returns [copy, hiddenCount].
+function pub(x) { let n = 0; const walk = v => Array.isArray(v) ? v.filter(i => !(i && i.private && ++n)).map(walk)
+  : v && typeof v === 'object' ? Object.fromEntries(Object.entries(v).filter(([k]) => k !== 'privateNote').map(([k, w]) => [k, walk(w)])) : v;
+  const c = walk(x); return [c, n]; }
+const itxt = i => typeof i === 'string' ? i : i?.t || '';
+// The ONLY way to export: every PDF goes through pub(), so private items never reach a shared sheet.
+function printDoc(src, build, extraHidden = 0) { const [c, n] = pub(src); printing = { title: c.title, html: build(c), hidden: n + extraHidden, back: tab }; tab = 'print'; render(); }
 views.print = () => {
   if (!printing) { tab = 'home'; return render(); }
   $app.innerHTML = `<div class="noprint printbar"><button data-act="printBack">‹ Назад</button><button class="primary" data-act="printGo">Зберегти PDF / друк</button></div>
+    ${printing.hidden ? `<p class="noprint muted printbar">🔒 Особисте не потрапить у PDF: приховано ${printing.hidden}.</p>` : ''}
     <article class="sheet"><h1>${esc(printing.title)}</h1>${printing.html}</article>`;
 };
 function tripPrint(t) {
   const cur = esc(t.currency || ''), sum = (t.budget || []).reduce((a, b) => a + (+b.sum || 0), 0), ch = (t.options || []).find(o => o.id === t.chosen);
-  const tasks = (t.taskIds || []).map(id => data.tasks.find(x => x.id === id)).filter(Boolean);
+  const tasks = (t.taskIds || []).map(id => data.tasks.find(x => x.id === id)).filter(x => x && !x.private);
   return `<p>${t.from ? `<b>${ddm(t.from)}${t.to ? '–' + ddm(t.to) : ''}</b> · ` : ''}${TRIP[t.status] || ''}</p>${t.note ? `<p>${plink(t.note)}</p>` : ''}
     ${(t.options || []).length ? `<h2>${ch ? 'Обраний варіант' : 'Варіанти'}</h2><table>${(ch ? [ch] : t.options).map(o => `<tr><td><b>${esc(o.title || '')}</b>${o.note ? `<br>${plink(o.note)}` : ''}${o.link ? `<br>${plink(o.link)}` : ''}</td><td>${esc(o.dates || '')}</td><td class="num">${o.budget ? o.budget + ' ' + cur : ''}</td></tr>`).join('')}</table>` : ''}
     ${t.route ? `<h2>Дорога</h2><p>${plink(t.route)}</p>` : ''}${t.stay ? `<h2>Житло</h2><p>${plink(t.stay)}</p>` : ''}
-    ${(t.days || []).length ? `<h2>По днях</h2><table>${t.days.map(d => `<tr><td class="nowrap"><b>${d.date ? WD[new Date(d.date + 'T12:00:00').getDay()] + ' ' + ddm(d.date) : ''}</b>${d.title ? `<br>${esc(d.title)}` : ''}</td><td>${(d.items || []).map(plink).join('<br>')}</td></tr>`).join('')}</table>` : ''}
+    ${(t.days || []).length ? `<h2>По днях</h2><table>${t.days.map(d => `<tr><td class="nowrap"><b>${d.date ? WD[new Date(d.date + 'T12:00:00').getDay()] + ' ' + ddm(d.date) : ''}</b>${d.title ? `<br>${esc(d.title)}` : ''}</td><td>${(d.items || []).map(i => plink(itxt(i))).join('<br>')}</td></tr>`).join('')}</table>` : ''}
     ${(t.budget || []).length ? `<h2>Бюджет</h2><table>${t.budget.map(b => `<tr><td>${esc(b.item)}${b.paid ? ' ✓' : ''}</td><td class="num">${b.sum ?? '?'} ${cur}</td></tr>`).join('')}<tr><td><b>Разом</b></td><td class="num"><b>${sum} ${cur}</b></td></tr></table>` : ''}
     ${tasks.length ? `<h2>Що зробити</h2><ul class="chk">${tasks.map(x => `<li>${x.done ? '☑' : '☐'} ${esc(x.title)}${x.due ? ` — до ${ddm(x.due)}` : ''}</li>`).join('')}</ul>` : ''}
     ${(t.packing || []).length ? `<h2>Речі</h2><ul class="chk cols">${t.packing.map(i => `<li>☐ ${esc(i.t)}</li>`).join('')}</ul>` : ''}`;
@@ -329,6 +337,7 @@ function planPrint(p) {
 }
 
 // ---------- Trip plan: options → chosen, route/stay, day-by-day, budget, packing, linked tasks ----------
+const lk = x => x?.private ? '🔒 ' : '';
 const TRIP = { idea: '💡 ідея', choosing: '🤔 вибираємо', booked: '✅ заброньовано', done: '🏁 минула' };
 let tripId = null;
 views.trip = () => {
@@ -337,14 +346,14 @@ views.trip = () => {
   const tasks = (t.taskIds || []).map(id => data.tasks.find(x => x.id === id)).filter(Boolean), pk = t.packing || [];
   const wd = d => ['Нд', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'][new Date(d + 'T12:00:00').getDay()];
   shell(`<div class="row cal-head"><button data-act="tab" data-v="plan">‹</button><h1>${esc(t.title)}</h1></div>
-    <p>${TRIP[t.status] || ''}${t.from ? ` · ${dm(t.from)}${t.to ? '–' + dm(t.to) : ''}` : ''}</p>${t.note ? `<p class="muted">${linkify(t.note)}</p>` : ''}
-    ${(t.options || []).length ? `<h3>Варіанти</h3><ul class="list">${t.options.map(o => `<li class="${t.chosen && t.chosen !== o.id ? 'done' : ''}"><div><b>${t.chosen === o.id ? '✓ ' : ''}${esc(o.title || o.dates || '')}</b>
+    <p>${TRIP[t.status] || ''}${t.from ? ` · ${dm(t.from)}${t.to ? '–' + dm(t.to) : ''}` : ''}</p>${t.note ? `<p class="muted">${linkify(t.note)}</p>` : ''}${t.privateNote ? `<p class="muted">🔒 ${linkify(t.privateNote)}</p>` : ''}
+    ${(t.options || []).length ? `<h3>Варіанти</h3><ul class="list">${t.options.map(o => `<li class="${t.chosen && t.chosen !== o.id ? 'done' : ''}"><div><b>${lk(o)}${t.chosen === o.id ? '✓ ' : ''}${esc(o.title || o.dates || '')}</b>
       <small>${[o.dates && o.title ? o.dates : '', o.budget && o.budget + ' ' + cur].filter(Boolean).map(esc).join(' · ')}</small>${o.note ? `<small>${linkify(o.note)}</small>` : ''}${o.link ? `<small class="note">${linkify(o.link)}</small>` : ''}</div></li>`).join('')}</ul>` : ''}
     ${t.route || t.stay ? `<h3>Дорога і житло</h3>${t.route ? `<p>🚗 ${linkify(t.route)}</p>` : ''}${t.stay ? `<p>🏠 ${linkify(t.stay)}</p>` : ''}` : ''}
-    ${(t.days || []).length ? `<h3>По днях</h3>${t.days.map(d => `<p><b>${d.date ? `${wd(d.date)} ${dm(d.date)}` : esc(d.title || '')}</b>${d.date && d.title ? ' · ' + esc(d.title) : ''}</p><ul class="hint">${(d.items || []).map(i => `<li>${linkify(i)}</li>`).join('')}</ul>`).join('')}` : ''}
-    ${(t.budget || []).length ? `<h3>Бюджет: ${sum} ${esc(cur)}</h3><ul class="list">${t.budget.map(b => `<li class="${b.paid ? 'done' : ''}"><div><b>${esc(b.item)}</b>${b.paid ? '<small>оплачено</small>' : ''}</div><span>${b.sum ?? '?'} ${esc(cur)}</span></li>`).join('')}</ul>` : ''}
-    ${tasks.length ? `<h3>Справи</h3><ul class="list">${tasks.map(x => `<li class="${x.done ? 'done' : ''}" data-act="toggleTaskDone" data-v="${x.id}|${Logic.localDay()}"><span class="box"></span><div><b>${esc(x.title)}</b>${x.due ? `<small>до ${dm(x.due)}</small>` : ''}</div></li>`).join('')}</ul>` : ''}
-    ${pk.length ? `<h3>Речі (${pk.filter(i => i.done).length}/${pk.length})</h3><ul class="list">${pk.map(i => `<li class="${i.done ? 'done' : ''}" data-act="packTog" data-v="${t.id}|${i.id}"><span class="box"></span><div><b>${esc(i.t)}</b></div></li>`).join('')}</ul>` : ''}
+    ${(t.days || []).length ? `<h3>По днях</h3>${t.days.map(d => `<p><b>${d.date ? `${wd(d.date)} ${dm(d.date)}` : esc(d.title || '')}</b>${d.date && d.title ? ' · ' + esc(d.title) : ''}</p><ul class="hint">${(d.items || []).map(i => `<li>${i.private ? '🔒 ' : ''}${linkify(itxt(i))}</li>`).join('')}</ul>`).join('')}` : ''}
+    ${(t.budget || []).length ? `<h3>Бюджет: ${sum} ${esc(cur)}</h3><ul class="list">${t.budget.map(b => `<li class="${b.paid ? 'done' : ''}"><div><b>${lk(b)}${esc(b.item)}</b>${b.paid ? '<small>оплачено</small>' : ''}</div><span>${b.sum ?? '?'} ${esc(cur)}</span></li>`).join('')}</ul>` : ''}
+    ${tasks.length ? `<h3>Справи</h3><ul class="list">${tasks.map(x => `<li class="${x.done ? 'done' : ''}" data-act="toggleTaskDone" data-v="${x.id}|${Logic.localDay()}"><span class="box"></span><div><b>${lk(x)}${esc(x.title)}</b>${x.due ? `<small>до ${dm(x.due)}</small>` : ''}</div></li>`).join('')}</ul>` : ''}
+    ${pk.length ? `<h3>Речі (${pk.filter(i => i.done).length}/${pk.length})</h3><ul class="list">${pk.map(i => `<li class="${i.done ? 'done' : ''}" data-act="packTog" data-v="${t.id}|${i.id}"><span class="box"></span><div><b>${lk(i)}${esc(i.t)}</b></div></li>`).join('')}</ul>` : ''}
     <button data-act="printTrip" data-v="${t.id}">📄 PDF / друк</button>
     <form data-form="packAdd" class="add"><input type="hidden" name="id" value="${t.id}"><div class="row"><input name="t" placeholder="Додати річ" required><button class="primary" style="flex:0 0 64px">+</button></div></form>`);
 };
@@ -471,8 +480,8 @@ const acts = {
   timerStop: async v => { data.timers = timers().filter(x => x.id !== v); await save(); render(); },
   timerPause: async v => { const t = timers().find(x => x.id === v); logTime(t); t.acc = elapsed(t); t.run = null; await save(); render(); },
   timerResume: async v => { for (const t of timers()) if (t.run) { logTime(t); t.acc = elapsed(t); t.run = null; } timers().find(x => x.id === v).run = Date.now(); await save(); render(); },
-  printTrip: v => { const t = data.trips.find(x => x.id === v); if (t) printDoc(t.title, tripPrint(t)); },
-  printPlan: v => { const p = data.plans.find(x => x.id === v); if (p) printDoc(p.title, planPrint(p)); },
+  printTrip: v => { const t = data.trips.find(x => x.id === v); if (t) printDoc(t, tripPrint, (t.taskIds || []).filter(id => data.tasks.find(x => x.id === id)?.private).length); },
+  printPlan: v => { const p = data.plans.find(x => x.id === v); if (p) printDoc(p, planPrint); },
   printBack: () => { tab = printing?.back || 'home'; printing = null; render(); },
   printGo: async () => { // iOS home-screen apps ignore window.print → build a real PDF and open the share sheet.
     const standalone = navigator.standalone || matchMedia('(display-mode: standalone)').matches;
