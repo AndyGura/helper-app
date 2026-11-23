@@ -369,19 +369,20 @@ views.cal = () => {
   for (let d = 1; d <= n; d++) {
     const k = key(d), ds = Logic.doneSet(data, k), pl = Logic.dayPlan(data, k), act = data.routines.filter(r => pl.has(r.id) && !Logic.offOn(data, k, r.id));
     const done = act.filter(r => ds.has(r.id) || Logic.coveredAhead(data, r, k)).length, total = act.length, off = data.routines.map(r => Logic.offOn(data, k, r.id)).find(Boolean);
-    const due = data.tasks.some(t => t.due === k && !t.done), pct = total ? done / total : 0;
+    const due = data.tasks.some(t => !t.done && (t.due === k || (k === today && t.due && t.due < today))), pct = total ? done / total : 0;
     cells.push(`<button class="day ${k === today ? 'today' : ''} ${k === calSel ? 'sel' : ''}" data-act="calDay" data-v="${k}"
       style="--p:${pct}">${d}${due ? '<i></i>' : ''}${off ? `<em>${OFF[off].slice(0, 2)}</em>` : ''}</button>`);
   }
   const sel = calSel && (() => {
     const ids = Logic.doneSet(data, calSel);
-    const tasks = data.tasks.filter(t => t.due === calSel || (t.doneAt || '').startsWith(calSel));
+    // Today also carries every overdue open task forward (missed one shows up the next day, and keeps coming).
+    const tasks = data.tasks.filter(t => t.due === calSel || (t.doneAt || '').startsWith(calSel) || (calSel === today && !t.done && t.due && t.due < today));
     const pl = Logic.dayPlan(data, calSel), main = r => pl.has(r.id) || ids.has(r.id) || Logic.timeOn(data, calSel, r.id);
     const li = r => { const off = Logic.offOn(data, calSel, r.id), ahead = Logic.coveredAhead(data, r, calSel); return `<li class="${ids.has(r.id) || off || ahead ? 'done' : ''}" data-act="toggleRoutine" data-v="${calSel}|${r.id}"><span class="box"></span><div><b>${esc(r.title)}</b>${off ? `<small>${OFF[off]}</small>` : ahead ? '<small>зроблено наперед</small>' : !Logic.appliesOn(r, calSel, data) ? '<small>поза графіком (наперед)</small>' : ''}${r.goal || Logic.timeOn(data, calSel, r.id) ? `<small>${hm(Logic.timeOn(data, calSel, r.id))}${r.goal ? ' з ' + hm(r.goal * 6e4) : ''}</small>` : ''}</div>
       ${r.goal ? Object.keys(OFF).map(k => `<button class="mini ${off === k ? 'primary' : ''}" data-act="setOff" data-v="${calSel}|${r.id}|${k}" title="${OFF[k]}">${OFF[k].slice(0, 2)}</button>`).join('') : ''}</li>`; };
     const others = data.routines.filter(r => !main(r));
     return `<h3>${calSel}</h3><ul class="list">${data.routines.filter(main).map(li).join('')}
-      ${tasks.map(t => `<li class="${t.done ? 'done' : ''}" data-act="toggleTaskDone" data-v="${t.id}|${calSel}"><span class="box"></span><div><b>${esc(t.title)}</b><small>справа</small></div></li>`).join('')}</ul>
+      ${tasks.map(t => `<li class="${t.done ? 'done' : ''}" data-act="toggleTaskDone" data-v="${t.id}|${calSel}"><span class="box"></span><div><b>${esc(t.title)}</b><small>${!t.done && t.due < calSel ? `справа · прострочено з ${+t.due.slice(8)}.${t.due.slice(5, 7)}` : 'справа'}</small></div></li>`).join('')}</ul>
       ${others.length ? `<details><summary>Інші звички — відмітити заднім числом (${others.length})</summary><ul class="list">${others.map(li).join('')}</ul></details>` : ''}`;
   })();
   shell(`<div class="row cal-head"><button data-act="calMove" data-v="-1">‹</button><h1>${MONTHS[m]} ${y}</h1><button data-act="calMove" data-v="1">›</button></div>
