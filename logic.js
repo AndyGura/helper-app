@@ -227,18 +227,19 @@ const Logic = (() => {
     const wd = new Date(day + 'T12:00:00').getDay();
     return { i, stage: s, items: s ? (s.home || []).filter(x => (!x.days || x.days.includes(wd)) && (!x.to || day <= x.to) && (!x.from || day >= x.from)) : [] };
   }
-  // Monthly tasks: t.monthly = day of month (1–31, clamped to month length). When one is done, the next
-  // month's copy appears, due on that day; suggested from `lead` days before (default 0 = from that day).
+  // Monthly tasks: t.monthly = day of month (1–31, clamped to month length), t.months = interval (default 1, 3 = quarterly).
+  // When one is done, the next copy appears, due on that day; suggested from `lead` days before (default 0 = from that day).
   // Until done it stays overdue, so the morning push and the home screen keep reminding daily. Deterministic id → no duplicates across devices.
-  function monthlyDue(dom, after) { // first date with that day-of-month strictly after `after` (YYYY-MM-DD)
+  // First date with that day-of-month strictly after `after` (YYYY-MM-DD), stepping `step` months (3 = quarterly).
+  function monthlyDue(dom, after, step = 1) {
     let [y, m] = after.split('-').map(Number);
     for (;;) { const k = `${y}-${String(m).padStart(2, '0')}-${String(Math.min(dom, new Date(y, m, 0).getDate())).padStart(2, '0')}`;
-      if (k > after) return k; if (++m > 12) { m = 1; y++; } }
+      if (k > after) return k; m += step; while (m > 12) { m -= 12; y++; } }
   }
   function rollMonthly(data, now = Date.now()) {
     for (const t of [...data.tasks]) {
       if (!t.monthly || !t.done || t.next) continue;
-      const base = t.due || (t.doneAt || new Date(now).toISOString()).slice(0, 10), due = monthlyDue(t.monthly, base);
+      const base = t.due || (t.doneAt || new Date(now).toISOString()).slice(0, 10), due = monthlyDue(t.monthly, base, t.months || 1);
       const series = t.series || t.id, nid = `${series}_${due.slice(0, 7).replace('-', '')}`;
       const from = localDay(new Date(Date.parse(due + 'T12:00:00') - (t.lead || 0) * 864e5));
       if (!data.tasks.some(x => x.id === nid) && !data.deleted?.[nid])

@@ -223,7 +223,7 @@ views.tasks = () => {
   const open = data.tasks.filter(t => !t.done).sort((a, b) => (a.due || '9') < (b.due || '9') ? -1 : 1);
   const today = Logic.doneSet(data, Logic.localDay());
   const taskLi = t => t.id === editId ? `<li class="edit">${taskFormHtml(t)}</li>` : `<li data-act="toggleTask" data-v="${t.id}"><span class="box"></span>
-      <div><b>${t.focus ? '★ ' : ''}${esc(t.title)}</b><small>${[t.due, t.monthly && `щомісяця ${t.monthly}-го`, t.minutes && t.minutes + ' хв'].filter(Boolean).join(' · ')}</small>${t.link ? `<small class="note">${linkify(t.link)}</small>` : ''}</div>
+      <div><b>${t.focus ? '★ ' : ''}${esc(t.title)}</b><small>${[t.due, t.monthly && `${t.months === 3 ? 'щокварталу' : t.months > 1 ? `кожні ${t.months} міс.` : 'щомісяця'} ${t.monthly}-го`, t.minutes && t.minutes + ' хв'].filter(Boolean).join(' · ')}</small>${t.link ? `<small class="note">${linkify(t.link)}</small>` : ''}</div>
       <button class="x" data-act="edit" data-v="${t.id}">✎</button><button class="x" data-act="delTask" data-v="${t.id}">✕</button></li>`;
   const top = open.slice(0, 3), later = open.slice(3);
   const routineLi = routineLiFactory(today);

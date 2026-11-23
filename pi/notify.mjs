@@ -22,7 +22,7 @@ if (state.day !== today) state = { day: today, sent: [], pushed: (state.pushed |
 
 // Reminders: [key, minute of day, condition, text]. Text stays neutral (others may see the lock screen).
 const open = (data.tasks || []).filter(t => !t.done);
-const due = open.filter(t => t.due && t.due <= today).length;
+const due = open.filter(t => (t.due && t.due <= today) || (t.from && t.from <= today)).length; // `from`: remind ahead of the deadline
 const freshNote = (data.inbox || []).some(n => Date.now() - (n.u || 0) < 6 * 3600e3);
 const rules = [
   ['morning', weekend ? 570 : 510, true, due ? `План на сьогодні готовий · ${due} на сьогодні` : 'План на сьогодні готовий'],
