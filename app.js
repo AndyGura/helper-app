@@ -164,6 +164,7 @@ views.home = () => {
       <p>${esc(qs[0].q)}</p><input type="hidden" name="id" value="${qs[0].id}">
       <textarea name="a" rows="3" placeholder="Скільки хочеш, своїми словами" required></textarea>
       <div class="row"><button class="primary">Відповісти</button><button type="button" data-act="qLater" data-v="${qs[0].id}">Пізніше</button></div></form>` : '')((data.questions || []).filter(q => !q.a && !qLater.includes(q.id)))}
+    ${(v => v ? `<button class="primary" data-act="tab" data-v="visits">🩺 Сказати лікарю: ${esc(v.title)}${v.date ? ' · ' + ddm(v.date) : ''}</button>` : '')(soonVisit())}
     <button class="big" data-act="next">Що мені робити?</button>
     ${c && c.kind === 'sleep' ? `<div class="card"><h2>${esc(c.title)}</h2></div>` : c ? `<div class="card"><h2>${esc(c.title)}</h2>
       ${c.minutes ? `<p class="muted">${c.minutes} хв</p>` : ''}${c.item && c.item.link ? `<p class="note">${linkify(c.item.link)}</p>` : ''}${planHint(c.item)}
@@ -175,6 +176,7 @@ views.home = () => {
       <select name="ref"><option value="">Своє (впиши нижче)</option>${data.routines.filter(timed).map(r => `<option value="${r.id}">${esc(r.title)}${r.goal ? ` (ціль ${hm(r.goal * 6e4)})` : ''}</option>`).join('')}</select>
       <input name="title" placeholder="Що робиш">
       <div class="row"><input name="minutes" type="number" min="1" placeholder="хв (порожньо = секундомір)"><button class="primary">Почати</button></div></form>
+    <button data-act="tab" data-v="visits">🩺 Сказати лікарю</button>
     <form data-form="memo" class="add quick"><h3>Запам'ятай</h3>
       <textarea name="text" rows="2" placeholder="Факт, ідея, що завгодно (напр. розмір шин 275/45 R20)" required></textarea>
       <button class="primary">Зберегти</button>
@@ -349,6 +351,26 @@ function planPrint(p) {
     ${(p.targets || []).length ? `<h2>Цілі</h2><table><tr><th>Вправа</th><th class="num">Зараз</th><th class="num">Ціль</th></tr>${p.targets.map(t => `<tr><td>${esc(t.name)}</td><td class="num">${t.now ?? '—'}</td><td class="num">${t.goal} ${esc(t.unit || '')}</td></tr>`).join('')}</table>` : ''}`;
 }
 
+// ---------- "Tell the doctor": per upcoming visit, what to say / ask / bring; tick off at the appointment ----------
+const VK = { say: 'Сказати', ask: 'Спитати', bring: 'Взяти з собою' };
+const openVisits = () => (data.visits || []).filter(v => !v.done).sort((a, b) => (a.date || '9') < (b.date || '9') ? -1 : 1);
+function soonVisit() { const t = Logic.localDay(); return openVisits().find(v => v.date && v.date >= t && Math.round((Date.parse(v.date) - Date.parse(t)) / 864e5) <= 3); }
+views.visits = () => {
+  const vs = openVisits();
+  const one = v => { const it = v.items || [], left = it.filter(i => !i.done).length;
+    return `<h3>${esc(v.title)}${v.date ? ` · ${WD[new Date(v.date + 'T12:00:00').getDay()]} ${ddm(v.date)}` : ''}</h3>${v.note ? `<p class="muted">${linkify(v.note)}</p>` : ''}
+    ${Object.keys(VK).map(k => (xs => xs.length ? `<p class="muted">${VK[k]}</p><ul class="list">${xs.map(i => `<li class="${i.done ? 'done' : ''}" data-act="visitTog" data-v="${v.id}|${i.id}"><span class="box"></span><div><b>${esc(i.t)}</b></div></li>`).join('')}</ul>` : '')(it.filter(i => (i.kind || 'say') === k))).join('')}
+    <form data-form="visitAdd" class="add"><input type="hidden" name="id" value="${v.id}"><textarea name="t" rows="2" placeholder="Симптом, питання чи що взяти" required></textarea>
+      <div class="row"><select name="kind">${Object.entries(VK).map(([k, t]) => `<option value="${k}">${t}</option>`).join('')}</select><button class="primary">Додати</button></div></form>
+    <form data-form="visitResult" class="add"><input type="hidden" name="id" value="${v.id}"><textarea name="result" rows="3" placeholder="Що сказав лікар: діагноз, призначення, аналізи">${esc(v.result || '')}</textarea>
+      <div class="row"><button>Зберегти відповідь</button><button type="button" data-act="visitPrint" data-v="${v.id}">📄 PDF</button></div>
+      <button type="button" data-act="visitDone" data-v="${v.id}">Візит завершено${left ? ` (не відмічено ${left})` : ''}</button></form>`; };
+  shell(`<div class="row cal-head"><button data-act="tab" data-v="home">‹</button><h1>Сказати лікарю</h1></div>
+    ${vs.map(one).join('') || '<p class="muted">Немає запланованих візитів.</p>'}
+    <details ${vs.length ? '' : 'open'}><summary>+ Новий візит</summary><form data-form="visitNew" class="add"><input name="title" placeholder="До кого (напр. терапевт)" required><input name="date" type="date"><button class="primary">Додати</button></form></details>`);
+};
+function visitPrint(v) { return `${v.date ? `<p><b>${ddm(v.date)}</b></p>` : ''}${Object.keys(VK).map(k => (xs => xs.length ? `<h2>${VK[k]}</h2><ul class="chk">${xs.map(i => `<li>☐ ${plink(i.t)}</li>`).join('')}</ul>` : '')((v.items || []).filter(i => (i.kind || 'say') === k))).join('')}`; }
+
 // ---------- Trip plan: options → chosen, route/stay, day-by-day, budget, packing, linked tasks ----------
 const lk = x => x?.private ? '🔒 ' : '';
 const TRIP = { idea: '💡 ідея', choosing: '🤔 вибираємо', booked: '✅ заброньовано', done: '🏁 минула' };
@@ -503,6 +525,9 @@ const acts = {
     const btn = document.querySelector('[data-act=printGo]'); btn.disabled = true; btn.textContent = 'Готую PDF…';
     try { await pdfShare(printing.title, document.querySelector('.sheet')); } catch (e) { if (e.name !== 'AbortError') alert('Не вдалося: ' + e.message); }
     btn.disabled = false; btn.textContent = 'Зберегти PDF / друк'; },
+  visitTog: async v => { const [vid, iid] = v.split('|'), x = data.visits.find(y => y.id === vid), i = x?.items?.find(y => y.id === iid); if (!i) return; i.done = !i.done; Logic.touch(x); await save(); render(); },
+  visitDone: async v => { const x = data.visits.find(y => y.id === v); if (!x) return; x.done = true; Logic.touch(x); await save(); render(); },
+  visitPrint: v => { const x = data.visits.find(y => y.id === v); if (x) printDoc(x, visitPrint); },
   trip: v => { tripId = v; tab = 'trip'; render(); },
   packTog: async v => { const [tid, iid] = v.split('|'), t = (data.trips || []).find(x => x.id === tid), i = t?.packing?.find(x => x.id === iid); if (!i) return;
     i.done = !i.done; Logic.touch(t); await save(); render(); },
@@ -549,6 +574,9 @@ const forms = {
   checkin: f => (data.checkins = data.checkins || []).push({ u: Date.now(), id: Logic.id(), date: Logic.localDay(), text: f.text.trim() }),
   memo: f => (data.memos = data.memos || []).push({ u: Date.now(), id: Logic.id(), text: f.text.trim(), date: new Date().toISOString() }),
   addShop: f => data.shopping.push({ u: Date.now(), id: Logic.id(), store: f.store.trim() || f.storeSel || 'Інше', text: f.text.trim(), note: f.note.trim(), done: false }),
+  visitNew: f => { (data.visits = data.visits || []).push({ id: Logic.id(), u: Date.now(), title: f.title.trim(), date: f.date || null, items: [] }); },
+  visitAdd: f => { const v = (data.visits || []).find(x => x.id === f.id); if (!v) return; (v.items = v.items || []).push({ id: Logic.id(), t: f.t.trim(), kind: f.kind, done: false }); Logic.touch(v); },
+  visitResult: f => { const v = (data.visits || []).find(x => x.id === f.id); if (!v) return; v.result = f.result.trim(); Logic.touch(v); },
   packAdd: f => { const t = (data.trips || []).find(x => x.id === f.id); if (!t) return; (t.packing = t.packing || []).push({ id: Logic.id(), t: f.t.trim(), done: false }); Logic.touch(t); },
   addTask: f => data.tasks.push({ u: Date.now(), id: Logic.id(), title: f.title.trim(), ...monthlyFields(f), minutes: num(f.minutes), focus: !!f.focus, done: false }),
   settings: f => { data.settings = { ...data.settings, ...f }; Chat.resetContext(); },
