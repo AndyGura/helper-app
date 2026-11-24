@@ -252,6 +252,16 @@ const Logic = (() => {
       t.next = nid; t.u = +now;
     }
   }
+  // Energy guessed from what was done (when the user wrote no check-in): planned habits done + optional, non-trivial tasks
+  // (no deadline that day, or done ahead; 15+ min, or unknown length counts half). 1–5, null when nothing to go on.
+  function energyGuess(data, day) {
+    const plan = dayPlan(data, day), ds = doneSet(data, day), act = data.routines.filter(r => plan.has(r.id) && !r.fixed);
+    const frac = act.length ? act.filter(r => ds.has(r.id)).length / act.length : 0;
+    const tasks = (data.tasks || []).filter(t => t.done && t.doneAt && localDay(new Date(t.doneAt)) === day);
+    const big = tasks.reduce((a, t) => a + ((t.minutes || 0) >= 15 ? 1 : t.minutes ? 0.3 : 0.5) * (!t.due || t.due > day ? 1.5 : 1), 0);
+    if (!ds.size && !tasks.length) return null;
+    return Math.max(1, Math.min(5, Math.round(1 + frac * 2 + Math.min(2, big))));
+  }
   const id = () => Math.random().toString(36).slice(2, 10);
   // "Помічено": up to 2 short rule-based observations for the home screen (zero tokens).
   // Overdue / due-soon tasks, a must-do habit missed 3 scheduled days in a row, a good streak worth praising.
@@ -274,6 +284,6 @@ const Logic = (() => {
     return out.slice(0, 2);
   }
 
-  return { monthlyDue, rollMonthly, planNow, weekDays, noticed, isKidsWeek, dailyCap, dayPlan, weekCount, sinceLast, dueEvery, streak, coveredAhead, appliesOn, offOn, setOff, addTime, timeOn, doneSet, setRoutine, empty, candidates, pickNext, markDone, pruneShopping, localDay, id, touch, remove, merge, COLLECTIONS };
+  return { energyGuess, monthlyDue, rollMonthly, planNow, weekDays, noticed, isKidsWeek, dailyCap, dayPlan, weekCount, sinceLast, dueEvery, streak, coveredAhead, appliesOn, offOn, setOff, addTime, timeOn, doneSet, setRoutine, empty, candidates, pickNext, markDone, pruneShopping, localDay, id, touch, remove, merge, COLLECTIONS };
 })();
 if (typeof module !== 'undefined') module.exports = Logic;
