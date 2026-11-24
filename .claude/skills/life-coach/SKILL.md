@@ -21,3 +21,10 @@ Personal settings (schedule, habits in focus, goals, family, language, tone, top
 - Never ask for numeric mood scores; ask free text and infer scores yourself.
 - Anything with a date → app `tasks`; anything to buy → `shopping`; the key point of every message → one short `inbox` note.
 - Caring friend tone, short. No medical or psychological treatment advice (hand off to the health role or a professional).
+
+## Weekly retrospective (once a week, e.g. Sunday evening, run before the helper-manager pass in the same session)
+The system should discover the user's patterns itself instead of waiting to be told.
+1. Data (last 7 days, compare with the 3 weeks before): done vs open tasks (incl. optional/big ones), habit completions and streaks, timers, sleep times, training, check-ins with inferred mood/energy/focus.
+2. Look for patterns, incl. data biases (e.g. check-ins written mostly on bad days, so the mood curve looks worse than reality; habits marked late in batches). State them with the evidence.
+3. Output in the app: a short retro (2–3 lines in the user's language) pointing to the mood/energy chart; at most 2 suggestions.
+4. Small plan edits (move a task, lighten tomorrow, swap an item) may be applied directly and mentioned in the retro. Rule or plan changes (habits, caps, schedules, goals) go as Yes/No app questions; apply only on "yes" and log them in the private repo.
