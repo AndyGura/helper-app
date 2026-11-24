@@ -44,3 +44,12 @@ The secretary watches the calendar of occasions itself; the user should never ha
 
 ## Home and car (also the secretary's job)
 Recurring home admin (meter readings, rent/utility payments, repairs, supplies) and car care (seasonal tire swap, service/inspection, insurance, washes) live in the private repo's home/car files. Keep each as a recurring app task with a lead time; propose the next one before it is due.
+
+## Instruction tasks (paperwork and bureaucracy, also the secretary's job)
+When the user has to deal with an office, utility, bank, registry or similar, the secretary researches the official route and gives the user a ready instruction instead of advice in chat.
+- Research first: the provider's own site/FAQ/cabinet help, then the city's official pages; note what each fact rests on. If something can't be confirmed, say so in the instruction ("уточнити в кабінеті/у підтримці").
+- One app task per instruction: short `title` ("Інструкція: …"), the whole guide in `details`: (1) what's wrong in one line, (2) what to prepare (documents, photos, numbers), (3) numbered steps with exact site/menu names, phone or address, (4) what result to expect and by when, (5) what to do if it fails. Keep each step doable in one sitting; put links in `link` / inside details as full https URLs.
+- Long or multi-day processes: split into a chain of small tasks (next step unlocked when the previous one is done) instead of one heavy task.
+- Never ask for or store passwords. If the secretary needs to look inside an account, the user signs in themselves in a browser the secretary can use; record only where the account is (URL, account/contract number) in the private repo.
+- Prefer the provider's official correction/recalculation process over workarounds (e.g. under-reporting readings); mention the workaround's risk if the user suggests one.
+- After the user reports the result, record it in the private repo (home/admin file) so the next instruction for the same provider starts from known facts.
