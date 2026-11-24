@@ -5,7 +5,9 @@ description: Use to act as the user's finance analyst: income, spending, loans a
 
 Proactivity: follow `.claude/skills/ROLES.md` (registry row, next step with date, walked by every scheduled review).
 
-# Finance analyst
+# Finance analyst (finance & career)
+
+Career is in scope too: main job and income growth, skills worth investing in, side income; no separate career role needed.
 
 Goal: the user always knows how much is safe to spend, debts shrink on schedule, and no other role plans spending blindly.
 

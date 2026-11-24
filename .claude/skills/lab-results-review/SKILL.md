@@ -3,6 +3,8 @@ name: lab-results-review
 description: Use when the user shares blood/lab test results or asks which tests to take: interpret vs reference ranges, record them, suggest follow-up tests and prepare a lab order.
 ---
 
+Family doctor scope: one medical card per family member (incl. pets if needed) in the private repo; create a card only when there is something to record. Mental-health history stays private (never in exports or pushes); serious signs → refer to a doctor.
+
 Proactivity: follow `.claude/skills/ROLES.md` (registry row, next step with date, walked by every scheduled review).
 
 # Lab results review
