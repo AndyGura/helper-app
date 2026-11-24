@@ -349,6 +349,7 @@ function roleHead(rid) {
   const vis = F2(data.visits, 'visits', rid).filter(v => !v.done);
   return `<div class="row cal-head"><button data-act="tab" data-v="menu">‹</button><h1>${esc(r.emoji || '')} ${esc(r.name)}</h1></div>
     ${r.about ? `<p class="muted">${esc(r.about)}</p>` : ''}${r.next ? `<p>Далі: ${esc(r.next)}${r.date ? ' · ' + ddm(r.date) : ''}</p>` : ''}
+    ${(r.summary || []).length ? `<h3>Що вже є</h3><ul class="hint">${r.summary.map(x => `<li>${linkify(x)}</li>`).join('')}</ul>` : ''}
     ${notes.map(n => `<div class="note"><p>${linkify(n.text)}</p></div>`).join('')}
     ${tasks.length ? `<h3>Справи</h3><ul class="list">${tasks.map(t => `<li class="${t.done ? 'done' : ''}" data-act="taskMenu" data-v="${t.id}"><span class="box"></span><div><b class="clamp">${esc(t.title)}</b><small>${taskMeta(t)}</small></div></li>`).join('')}</ul>` : ''}
     ${habits.length ? `<h3>Звички</h3><ul class="list">${habits.map(h => `<li class="${ds.has(h.id) ? 'done' : ''}" data-act="toggleRoutine" data-v="${ld}|${h.id}"><span class="box"></span><div><b>${esc(h.title)}${(st => st >= 2 ? ` <span class="streak">🔥${st}</span>` : '')(Logic.streak(data, h))}</b></div></li>`).join('')}</ul>` : ''}
