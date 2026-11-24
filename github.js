@@ -29,12 +29,12 @@ const GH = (() => {
 
 // Sync app data to <repo>/data/app.json with an item-level merge (see Logic.merge),
 // so edits from the phone and from the Claude project never overwrite each other.
-// Settings, chat and timer stay on the device.
+// Settings, chat, timer and unsent drafts stay on the device.
 const Sync = (() => {
   const PATH = 'data/app.json';
   let timer = null;
   const cfg = d => d.settings?.ghToken && d.settings?.ghRepo ? { token: d.settings.ghToken.trim(), repo: d.settings.ghRepo.trim().replace(/^https:\/\/github\.com\//, '').replace(/\/$/, '') } : null;
-  const shareable = ({ settings, chat, timer, timers, updatedAt, ...rest }) => rest;
+  const shareable = ({ settings, chat, timer, timers, updatedAt, drafts, ...rest }) => rest; // drafts: unsent text, device only
   // Pull, merge into d (in place), push back if the merge changed anything. Returns true if d changed.
   async function sync(d, retry = true) {
     const c = cfg(d); if (!c) return false;

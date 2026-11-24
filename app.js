@@ -13,7 +13,20 @@ async function syncNow(quiet = true) {
   try { if (await Sync.sync(data)) { await Vault.save(data); render(); } if (!quiet) alert('Синхронізовано'); }
   catch (e) { if (!quiet) alert('Помилка синхронізації: ' + e.message); }
 }
-function render() { data ? views[tab]() : lockView(); }
+function render() { data ? (views[tab](), restoreDrafts()) : lockView(); }
+// Unsent text survives a lock/reload: drafts live in data.drafts (encrypted vault, never synced), keyed by form + item id + field.
+const DRAFT_SKIP = new Set(['settings', 'timer']);
+const draftKey = el => { const f = el.form, n = el.name || el.id; if (!n || el.type === 'password' || el.type === 'hidden' || el.id === 'imp' || (f && DRAFT_SKIP.has(f.dataset.form))) return null;
+  return `${f?.dataset.form || tab}|${f?.elements.id?.value || ''}|${n}`; };
+let draftTimer = null;
+function draftSave() { clearTimeout(draftTimer); draftTimer = null; if (data) Vault.save(data).catch(() => {}); }
+function restoreDrafts() { const d = data.drafts || {};
+  for (const el of $app.querySelectorAll('textarea, input')) { const k = draftKey(el); if (k && d[k] != null && !el.value) el.value = d[k]; } }
+function clearDrafts(form) { if (!data.drafts) return; const p = `${form.dataset.form}|${form.elements.id?.value || ''}|`;
+  for (const k of Object.keys(data.drafts)) if (k.startsWith(p)) delete data.drafts[k]; }
+$app.addEventListener('input', e => { const el = e.target, k = data && draftKey(el); if (!k || el.type === 'checkbox') return;
+  const d = (data.drafts = data.drafts || {}); if (el.value) d[k] = el.value; else delete d[k];
+  clearTimeout(draftTimer); draftTimer = setTimeout(draftSave, 400); });
 
 // ---------- Lock ----------
 // ---------- Face ID (WebAuthn platform passkey, local gate before the PIN) ----------
@@ -72,7 +85,7 @@ async function unlock() {
 }
 function lock() { data = null; faceOk = false; current = null; Vault.lock(); clearInterval(tick); render(); }
 document.addEventListener('visibilitychange', () => {
-  if (document.hidden) hiddenAt = Date.now();
+  if (document.hidden) { hiddenAt = Date.now(); if (draftTimer) draftSave(); }
   // Reload instead of a plain lock: clears memory and picks up the latest app version.
   else if (Date.now() - hiddenAt > LOCK_AFTER_MS) { data = null; Vault.lock(); location.reload(); }
   else if (data) { render(); syncNow(); }
@@ -557,6 +570,7 @@ function monthlyFields(f) { const m = Math.min(31, Math.max(0, Math.round(num(f.
   return { monthly: m, due, from: m ? due : undefined }; }
 $app.addEventListener('submit', async e => {
   e.preventDefault();
+  if (data) clearDrafts(e.target);
   if (e.target.dataset.form === 'timer') {
     const f = Object.fromEntries(new FormData(e.target)), r = data.routines.find(x => x.id === f.ref);
     if (!r && !f.title.trim()) return alert('Вибери звичку або впиши назву');
