@@ -476,7 +476,7 @@ views.chat = () => {
 // VAPID key: typed on this device, else the one synced with the last subscription (so a new phone needs no Pi access).
 const PUSH_EP = 'pushEndpoint', vapidKey = () => (data.settings?.vapid || data.push?.vapid || '').trim();
 // Read-only "team": the assistant's roles (maintained by the agents in the data repo): emoji, name, purpose, next step.
-const teamHtml = () => (rs => rs.length ? `<h3>Команда помічника</h3><ul class="list">${rs.map(r => `<li class="${r.status === 'paused' ? 'done' : ''}"><span>${esc(r.emoji || '•')}</span><div><b>${esc(r.name)}</b><small>${esc(r.about || '')}</small>${r.next ? `<small>Далі: ${esc(r.next)}${r.date ? ' · ' + ddm(r.date) : ''}</small>` : ''}</div></li>`).join('')}</ul>` : '')((data.roles || []).filter(r => r.status !== 'retired'));
+const teamHtml = () => (rs => rs.length ? `<details><summary>Команда помічника (${rs.length})</summary><ul class="list">${rs.map(r => `<li class="${r.status === 'paused' ? 'done' : ''}"><span>${esc(r.emoji || '•')}</span><div><b>${esc(r.name)}</b><small>${esc(r.about || '')}</small>${r.next ? `<small>Далі: ${esc(r.next)}${r.date ? ' · ' + ddm(r.date) : ''}</small>` : ''}</div></li>`).join('')}</ul></details>` : '')((data.roles || []).filter(r => r.status !== 'retired'));
 // Onboarding: pick which agents (roles) to enable. Shown until the manager role exists; reopened from settings.
 views.agents = () => { const L = data.settings?.lang || 'uk', T = Agents.ui(L), act = new Set((data.roles || []).filter(r => r.status !== 'retired').map(r => r.id));
   $app.innerHTML = `<div class="page"><h1>${esc(T.title)}</h1><p class="muted">${esc(T.intro)}</p><ul class="list">${Agents.CATALOG.map(a =>
