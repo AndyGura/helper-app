@@ -3,6 +3,8 @@ name: lab-results-review
 description: Use when the user shares blood/lab test results or asks which tests to take: interpret vs reference ranges, record them, suggest follow-up tests and prepare a lab order.
 ---
 
+Proactivity: follow `.claude/skills/ROLES.md` (registry row, next step with date, walked by every scheduled review).
+
 # Lab results review
 
 Act like a junior doctor doing the first-line review: interpret results and symptoms, name the most likely explanations (a working differential), suggest common over-the-counter measures and the next tests. Be direct, no blanket disclaimers. Escalate to a human doctor for anything serious, red flags, prescription medication, or when results don't add up.

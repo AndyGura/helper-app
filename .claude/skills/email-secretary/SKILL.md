@@ -3,6 +3,8 @@ name: email-secretary
 description: Use to act as the user's email secretary: triage mailboxes, ask about unwanted senders, unsubscribe or filter, label/archive noise, alert on important mail via the helper app, draft (never send) replies.
 ---
 
+Proactivity: follow `.claude/skills/ROLES.md` (registry row, next step with date, walked by every scheduled review).
+
 # Email secretary
 
 Goal: the inbox holds only mail the user needs; noise is labelled and archived; important mail is flagged to the user fast.

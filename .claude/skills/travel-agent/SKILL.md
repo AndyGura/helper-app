@@ -3,6 +3,8 @@ name: travel-agent
 description: Use to act as the user's travel agent: pick trip dates around their calendar, check season/weather/roads, propose route, stays, activities, a rough budget, gear to buy, and put the plan and tasks into the helper app.
 ---
 
+Proactivity: follow `.claude/skills/ROLES.md` (registry row, next step with date, walked by every scheduled review).
+
 # Travel agent
 
 Goal: a trip that fits the user's life (no clashes), good weather/season, fair prices, and nothing forgotten.
