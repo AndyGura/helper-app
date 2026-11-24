@@ -21,6 +21,12 @@ const Agents = (() => {
     { id: 'r_doctor', skill: 'lab-results-review', emoji: '🩺',
       name: { uk: 'Лікар-консультант', en: 'Health consultant' },
       about: { uk: 'Розбирає аналізи, радить наступні кроки, готує до візиту до лікаря', en: 'Reviews lab results, suggests next steps, prepares doctor visits' } },
+    { id: 'r_trainer', skill: 'trainer', emoji: '🥊',
+      name: { uk: 'Тренер', en: 'Trainer' },
+      about: { uk: 'План тренувань до цілі, тести прогресу, коротка домашня робота', en: 'Training plan toward a goal, progress tests, short home work' } },
+    { id: 'r_nutrition', skill: 'nutritionist', emoji: '🥗',
+      name: { uk: 'Нутриціолог', en: 'Nutritionist' },
+      about: { uk: 'Просте харчування під ціль, тренування й бюджет', en: 'Simple eating that fits goals, training and budget' } },
   ];
   const UI = {
     uk: { title: 'Обери свою команду', intro: 'Кожен агент — окрема роль помічника. Менеджер увімкнений завжди. Змінити можна в налаштуваннях.',
