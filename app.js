@@ -93,10 +93,26 @@ document.addEventListener('visibilitychange', () => {
 
 // ---------- Layout ----------
 // Chat tab hidden for now (API is billed separately); code kept in chat.js.
-const TABS = [['home', 'Головна'], ['cal', 'Календар'], ['shop', 'Покупки'], ['tasks', 'Справи'], ['plan', '🎯'], ['settings', '⚙️']];
+const UNDER_MENU = ['menu', 'role', 'plan', 'settings', 'agents', 'trip', 'visits', 'taskInfo'];
+// Usage analytics, local only (encrypted vault, synced to the user's own data repo, no third party): usage[day][screen] = opens.
+// Bottom bar = Home + the 3 most used screens of the last 30 days (role dashboards included) + menu.
+let lastScreen = null;
+function countScreen() { const k = tab === 'role' ? 'role:' + roleId : tab; if (!data || k === lastScreen || ['agents', 'print'].includes(k)) return; lastScreen = k;
+  const d = Logic.localDay(), u = (data.usage = data.usage || {}); (u[d] = u[d] || {})[k] = (u[d][k] || 0) + 1;
+  const old = Logic.localDay(new Date(Date.now() - 60 * 864e5)); for (const x of Object.keys(u)) if (x < old) delete u[x]; }
+let navCache = null; // computed once per app start, so buttons don't jump around while using the app
+function navTabs() { if (navCache) return navCache;
+  const u = data.usage || {}, from = Logic.localDay(new Date(Date.now() - 30 * 864e5)), n = {};
+  for (const [d, m] of Object.entries(u)) if (d >= from) for (const [k, c] of Object.entries(m)) n[k] = (n[k] || 0) + c;
+  const label = k => k.startsWith('role:') ? (data.roles || []).find(r => 'role:' + r.id === k)?.emoji : ({ tasks: 'Справи', shop: 'Покупки', cal: 'Календар', plan: '🎯', visits: '🩺', settings: '⚙️' })[k];
+  const def = ['tasks', 'shop', 'cal'], cand = [...new Set([...Object.keys(n), ...def])].filter(k => label(k) && k !== 'home' && k !== 'menu');
+  const top = cand.sort((a, b) => (n[b] || 0) - (n[a] || 0) || (def.indexOf(a) + 1 || 9) - (def.indexOf(b) + 1 || 9)).slice(0, 3);
+  return navCache = [['home', 'Головна'], ...top.map(k => [k, label(k)]), ['menu', '☰']];
+}
 const shell = body => {
-  $app.innerHTML = `<div class="page">${body}</div>${sheetTask ? taskSheet() : ''}<nav>${TABS.map(([k, t]) =>
-    `<button data-act="tab" data-v="${k}" class="${k === tab ? 'on' : ''}">${t}</button>`).join('')}</nav>`;
+  countScreen(); const cur = tab === 'role' ? 'role:' + roleId : tab, nav = navTabs();
+  $app.innerHTML = `<div class="page">${body}</div>${sheetTask ? taskSheet() : ''}<nav>${nav.map(([k, t]) =>
+    `<button data-act="${k.startsWith('role:') ? 'role' : 'tab'}" data-v="${k.replace('role:', '')}" class="${k === cur || (k === 'menu' && UNDER_MENU.includes(tab) && !nav.some(([x]) => x === cur)) ? 'on' : ''}">${t}</button>`).join('')}</nav>`;
 };
 
 // ---------- Home: "Що мені робити?" + focus timer ----------
@@ -291,15 +307,16 @@ function routineFormHtml(r) { const v = k => r?.[k] != null ? `value="${r[k]}"` 
       <button class="primary">${r ? 'Зберегти' : 'Додати'}</button>${r ? '<button type="button" data-act="edit" data-v="">Скасувати</button>' : ''}</form>`; }
 
 // ---------- Plans: long-term goals (exam prep), stages + progress vs targets ----------
-views.plan = () => {
-  const ps = data.plans || [], today = Logic.localDay(), dm = d => `${+d.slice(8)}.${d.slice(5, 7)}`;
-  const tr = (data.trips || []).filter(t => t.status !== 'done'), old = (data.trips || []).filter(t => t.status === 'done');
+views.plan = (rid = null) => {
+  const F = (a, c) => (a || []).filter(x => !rid || mine(x, c, rid));
+  const ps = F(data.plans, 'plans'), today = Logic.localDay(), dm = d => `${+d.slice(8)}.${d.slice(5, 7)}`;
+  const tr = F(data.trips, 'trips').filter(t => t.status !== 'done'), old = F(data.trips, 'trips').filter(t => t.status === 'done');
   const tripLi = t => `<li data-act="trip" data-v="${t.id}"><div><b>${esc(t.title)}</b><small>${[TRIP[t.status], t.from && dm(t.from) + (t.to ? '–' + dm(t.to) : '')].filter(Boolean).join(' · ')}</small></div><span>›</span></li>`;
   const fm = v => (v > 0 ? '+' : v < 0 ? '−' : '') + Math.abs(Math.round(v)).toLocaleString('uk-UA');
-  const bud = (data.budgets || []).map(b => `<h3>${esc(b.title)}</h3>${b.note ? `<p class="muted">${linkify(b.note)}</p>` : ''}${(b.months || []).map(m => { const tot = (m.rows || []).reduce((a, r) => a + (+r.v || 0), 0);
+  const bud = F(data.budgets, 'budgets').map(b => `<h3>${esc(b.title)}</h3>${b.note ? `<p class="muted">${linkify(b.note)}</p>` : ''}${(b.months || []).map(m => { const tot = (m.rows || []).reduce((a, r) => a + (+r.v || 0), 0);
     return `<details${m.open ? ' open' : ''}><summary><b>${esc(m.name)}</b>: <span style="color:var(${tot < 0 ? '--bad' : '--acc'})">${fm(tot)} ${esc(b.cur || '')}</span></summary><ul class="list">${(m.rows || []).map(r => `<li><div><b>${esc(r.t)}</b>${r.note ? `<small>${linkify(r.note)}</small>` : ''}</div><span style="${r.v < 0 ? 'color:var(--bad)' : ''}">${r.v == null ? '?' : fm(r.v)}</span></li>`).join('')}</ul>${m.note ? `<p class="muted">${linkify(m.note)}</p>` : ''}</details>`; }).join('')}`).join('');
-  shell(`${bud ? `<h1>Бюджет</h1>${bud}` : ''}${tr.length || old.length ? `<h1>Подорожі</h1><ul class="list">${tr.map(tripLi).join('')}</ul>${old.length ? `<details><summary>Минулі (${old.length})</summary><ul class="list">${old.map(tripLi).join('')}</ul></details>` : ''}` : ''}
-    <h1>Цілі</h1>${ps.map(p => { const n = Logic.planNow(p, today), st = p.stages || [], ts = p.targets || [];
+  shell(`${rid ? roleHead(rid) : ''}${bud ? `<h1>Бюджет</h1>${bud}` : ''}${tr.length || old.length ? `<h1>Подорожі</h1><ul class="list">${tr.map(tripLi).join('')}</ul>${old.length ? `<details><summary>Минулі (${old.length})</summary><ul class="list">${old.map(tripLi).join('')}</ul></details>` : ''}` : ''}
+    ${ps.length || !rid ? '<h1>Цілі</h1>' : ''}${ps.map(p => { const n = Logic.planNow(p, today), st = p.stages || [], ts = p.targets || [];
     const pct = t => t.now == null ? 0 : Math.min(1, t.now / t.goal);
     const avg = ts.length ? Math.round(100 * ts.reduce((a, t) => a + pct(t), 0) / ts.length) : 0;
     return `<h3>${esc(p.title)}</h3>${p.note ? `<p class="muted">${esc(p.note)}</p>` : ''}
@@ -313,8 +330,32 @@ views.plan = () => {
       <p class="muted">До екзамену: ${avg}% · онови цифри після тесту</p>
       ${ts.map((t, i) => `<div class="target"><span>${esc(t.name)}</span><input name="t${i}" type="number" step="any" min="0" value="${t.now ?? ''}" placeholder="?"><small>/ ${t.goal} ${esc(t.unit || '')}</small>
         <i style="--p:${pct(t)}"></i></div>`).join('')}
-      <button class="primary">Зберегти результати</button></form><button data-act="printPlan" data-v="${p.id}">📄 PDF / друк плану</button>`; }).join('') || '<p class="muted">Поки немає довгих цілей.</p>'}`);
+      <button class="primary">Зберегти результати</button></form><button data-act="printPlan" data-v="${p.id}">📄 PDF / друк плану</button>`; }).join('') || (rid ? '' : '<p class="muted">Поки немає довгих цілей.</p>')}`);
 };
+
+// ---------- Menu + one dashboard per role (built from the roles list, so a new role gets a screen automatically) ----------
+// An item belongs to a role if it has `role: <id>`, else if the role owns its whole collection (Agents.owner).
+const mine = (x, coll, rid) => x.role ? x.role === rid : Agents.owner(coll) === rid;
+let roleId = null;
+const activeRoles = () => (data.roles || []).filter(r => r.status === 'active' || r.status === 'paused');
+views.menu = () => shell(`<h1>Меню</h1><ul class="list">${activeRoles().map(r => `<li data-act="role" data-v="${r.id}"><span>${esc(r.emoji || '•')}</span><div><b>${esc(r.name)}</b><small>${esc(r.about || '')}</small></div><span>›</span></li>`).join('')}</ul>
+  <ul class="list"><li data-act="tab" data-v="plan"><span>🎯</span><div><b>Усі цілі, бюджети й поїздки</b></div><span>›</span></li>
+  <li data-act="tab" data-v="settings"><span>⚙️</span><div><b>Налаштування</b></div><span>›</span></li></ul>`);
+function roleHead(rid) {
+  const r = (data.roles || []).find(x => x.id === rid) || { name: rid }, ld = Logic.localDay();
+  const notes = (data.inbox || []).filter(n => n.role === rid).slice(-3).reverse();
+  const tasks = (data.tasks || []).filter(t => t.role === rid && (!t.done || (t.doneAt && Logic.localDay(new Date(t.doneAt)) === ld)));
+  const habits = (data.routines || []).filter(h => h.role === rid), ds = Logic.doneSet(data, ld);
+  const vis = F2(data.visits, 'visits', rid).filter(v => !v.done);
+  return `<div class="row cal-head"><button data-act="tab" data-v="menu">‹</button><h1>${esc(r.emoji || '')} ${esc(r.name)}</h1></div>
+    ${r.about ? `<p class="muted">${esc(r.about)}</p>` : ''}${r.next ? `<p>Далі: ${esc(r.next)}${r.date ? ' · ' + ddm(r.date) : ''}</p>` : ''}
+    ${notes.map(n => `<div class="note"><p>${linkify(n.text)}</p></div>`).join('')}
+    ${tasks.length ? `<h3>Справи</h3><ul class="list">${tasks.map(t => `<li class="${t.done ? 'done' : ''}" data-act="taskMenu" data-v="${t.id}"><span class="box"></span><div><b class="clamp">${esc(t.title)}</b><small>${taskMeta(t)}</small></div></li>`).join('')}</ul>` : ''}
+    ${habits.length ? `<h3>Звички</h3><ul class="list">${habits.map(h => `<li class="${ds.has(h.id) ? 'done' : ''}" data-act="toggleRoutine" data-v="${ld}|${h.id}"><span class="box"></span><div><b>${esc(h.title)}${(st => st >= 2 ? ` <span class="streak">🔥${st}</span>` : '')(Logic.streak(data, h))}</b></div></li>`).join('')}</ul>` : ''}
+    ${vis.length ? `<h3>Візити</h3><ul class="list">${vis.map(v => `<li data-act="tab" data-v="visits"><div><b>${esc(v.title)}</b><small>${ddm(v.date)} · ${(v.items || []).length} пунктів</small></div><span>›</span></li>`).join('')}</ul>` : ''}`;
+}
+const F2 = (a, c, rid) => (a || []).filter(x => mine(x, c, rid));
+views.role = () => views.plan(roleId);
 
 // ---------- Print / PDF: a clean white A4 sheet with ONLY the given content (shareable, fridge-friendly). ----------
 // Uses the system print dialog → "Save as PDF" / share. No app chrome, no other data on the sheet.
@@ -561,6 +602,7 @@ const acts = {
   visitTog: async v => { const [vid, iid] = v.split('|'), x = data.visits.find(y => y.id === vid), i = x?.items?.find(y => y.id === iid); if (!i) return; i.done = !i.done; Logic.touch(x); await save(); render(); },
   visitDone: async v => { const x = data.visits.find(y => y.id === v); if (!x) return; x.done = true; Logic.touch(x); await save(); render(); },
   visitPrint: v => { const x = data.visits.find(y => y.id === v); if (x) printDoc(x, visitPrint); },
+  role: v => { roleId = v; tab = 'role'; render(); },
   trip: v => { tripId = v; tab = 'trip'; render(); },
   packTog: async v => { const [tid, iid] = v.split('|'), t = (data.trips || []).find(x => x.id === tid), i = t?.packing?.find(x => x.id === iid); if (!i) return;
     i.done = !i.done; Logic.touch(t); await save(); render(); },

@@ -43,6 +43,9 @@ const Agents = (() => {
     en: { title: 'Pick your team', intro: 'Each agent is a separate helper role. The manager is always on. You can change this in settings.',
       always: 'always on', done: 'Done', change: 'Change team', start: 'first step: a few short questions in the app', have: 'I already have data → Settings' },
   };
+  // Default owner of a whole collection (items may override with their own `role` field).
+  const OWNS = { trips: 'r_travel', budgets: 'r_finance', visits: 'r_doctor', plans: 'r_trainer' };
+  const owner = coll => OWNS[coll];
   const tr = (o, lang) => o[lang] || o.uk || o.en;
   const ui = lang => UI[lang] || UI.uk;
   // Onboarding only for a brand-new user: any existing roles or data (tasks, habits, notes) means skip it.
@@ -60,6 +63,6 @@ const Agents = (() => {
     return data;
   }
   const active = data => (data.roles || []).filter(r => r.status !== 'retired').map(r => r.id).sort();
-  return { CATALOG, UI, tr, ui, chosen, apply, active };
+  return { CATALOG, UI, tr, ui, chosen, apply, active, owner };
 })();
 if (typeof module !== 'undefined') module.exports = Agents;
