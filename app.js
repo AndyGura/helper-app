@@ -182,7 +182,7 @@ views.home = () => {
       <div class="row"><button class="primary">Відповісти</button><button type="button" data-act="qLater" data-v="${qs[0].id}">Пізніше</button></div></form>` : '')((data.questions || []).filter(q => !q.a && !qLater.includes(q.id)))}
     <button class="big" data-act="next">Що мені робити?</button>
     ${c && c.kind === 'sleep' ? `<div class="card"><h2>${esc(c.title)}</h2></div>` : c ? `<div class="card"><h2>${esc(c.title)}</h2>
-      ${c.minutes ? `<p class="muted">${c.minutes} хв</p>` : ''}${c.item && c.item.link ? `<p class="note">${linkify(c.item.link)}</p>` : ''}${planHint(c.item)}
+      ${c.minutes ? `<p class="muted">${c.minutes} хв</p>` : ''}${c.kind === 'routine' && c.item.details ? `<p>${linkify(c.item.details)}</p>` : ''}${c.item && c.item.link ? `<p class="note">${linkify(c.item.link)}</p>` : ''}${planHint(c.item)}
       <div class="row">
         ${timed(c) ? `<button class="primary" data-act="start">Почати ${c.minutes} хв</button>` : ''}
         <button data-act="done">Зроблено</button><button data-act="other">Інше</button>
@@ -195,7 +195,7 @@ views.home = () => {
       <textarea name="text" rows="2" placeholder="Факт, ідея, що завгодно (напр. розмір шин 275/45 R20)" required></textarea>
       <button class="primary">Зберегти</button>
       ${(() => { const ms = data.memos || [], wait = ms.filter(m => !m.result);
-        return (wait.length ? `<p class="muted">Чекають, поки помічник розкладе (щодня о 21:17): ${wait.length}</p>` : '')
+        return (wait.length ? `<p class="muted">Чекають, поки помічник розкладе (на найближчому огляді): ${wait.length}</p>` : '')
           + ms.filter(m => m.result).map(m => `<div class="note"><p><b>${esc(m.text)}</b><br><small class="muted">→ ${linkify(m.result)}</small></p>
             <button type="button" class="x" data-act="dismissMemo" data-v="${m.id}">✕</button></div>`).join(''); })()}</form>
   </section>`);
@@ -291,7 +291,7 @@ function taskFormHtml(t) { const v = k => t?.[k] != null ? `value="${esc(String(
       <label><input name="focus" type="checkbox" ${t?.focus ? 'checked' : ''}> Фокус ★</label>
       <button class="primary">${t ? 'Зберегти' : 'Додати'}</button>${t ? '<button type="button" data-act="edit" data-v="">Скасувати</button>' : ''}</form>`; }
 function routineLiFactory(today) { return r => r.id === editId ? `<li class="edit">${routineFormHtml(r)}</li>` : `<li class="${today.has(r.id) ? 'done' : ''}" data-act="toggleRoutine" data-v="${Logic.localDay()}|${r.id}"><span class="box"></span>
-      <div><b>${esc(r.title)}${(st => st >= 2 ? ` <span class="streak">🔥${st}</span>` : '')(Logic.streak(data, r))}</b><small>${r.perWeek ? `${Logic.weekCount(data, r, Logic.localDay())}/${r.perWeek} цього тижня · ` : ''}${r.every ? `раз на ${r.every} дн · ${(n => n === Infinity ? 'ще не було' : n === 1 && !today.has(r.id) ? 'вчора' : today.has(r.id) ? 'сьогодні' : n + ' дн тому')(Logic.sinceLast(data, r, Logic.localDay()))} · ` : ''}${r.goal ? `ціль ${hm(r.goal * 6e4)}/день (${hm(Logic.timeOn(data, Logic.localDay(), r.id))}) · ` : ''}${r.minutes ? r.minutes + ' хв · ' : ''}${r.from ?? 0}:00–${r.to ?? 24}:00${r.days ? ' · ' + (r.days.join() === '1,2,3,4,5' ? 'будні' : r.days.slice().sort((a, b) => ((a + 6) % 7) - ((b + 6) % 7)).map(x => ['Нд', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'][x]).join(' ')) : ''}</small></div>
+      <div><b>${esc(r.title)}${(st => st >= 2 ? ` <span class="streak">🔥${st}</span>` : '')(Logic.streak(data, r))}</b><small>${r.perWeek ? `${Logic.weekCount(data, r, Logic.localDay())}/${r.perWeek} цього тижня · ` : ''}${r.every ? `раз на ${r.every} дн · ${(n => n === Infinity ? 'ще не було' : n === 1 && !today.has(r.id) ? 'вчора' : today.has(r.id) ? 'сьогодні' : n + ' дн тому')(Logic.sinceLast(data, r, Logic.localDay()))} · ` : ''}${r.goal ? `ціль ${hm(r.goal * 6e4)}/день (${hm(Logic.timeOn(data, Logic.localDay(), r.id))}) · ` : ''}${r.minutes ? r.minutes + ' хв · ' : ''}${r.from ?? 0}:00–${r.to ?? 24}:00${r.days ? ' · ' + (r.days.join() === '1,2,3,4,5' ? 'будні' : r.days.slice().sort((a, b) => ((a + 6) % 7) - ((b + 6) % 7)).map(x => ['Нд', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'][x]).join(' ')) : ''}</small>${r.details ? `<small>${linkify(r.details)}</small>` : ''}</div>
       <button class="x" data-act="edit" data-v="${r.id}">✎</button><button class="x" data-act="delRoutine" data-v="${r.id}">✕</button></li>`; }
 const DAYS = [1, 2, 3, 4, 5, 6, 0], DN = ['Нд', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'];
 function routineFormHtml(r) { const v = k => r?.[k] != null ? `value="${r[k]}"` : '', pr = r?.prio || (r?.fixed ? 1 : 2); return `
