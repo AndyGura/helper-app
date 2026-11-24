@@ -295,7 +295,10 @@ views.plan = () => {
   const ps = data.plans || [], today = Logic.localDay(), dm = d => `${+d.slice(8)}.${d.slice(5, 7)}`;
   const tr = (data.trips || []).filter(t => t.status !== 'done'), old = (data.trips || []).filter(t => t.status === 'done');
   const tripLi = t => `<li data-act="trip" data-v="${t.id}"><div><b>${esc(t.title)}</b><small>${[TRIP[t.status], t.from && dm(t.from) + (t.to ? '–' + dm(t.to) : '')].filter(Boolean).join(' · ')}</small></div><span>›</span></li>`;
-  shell(`${tr.length || old.length ? `<h1>Подорожі</h1><ul class="list">${tr.map(tripLi).join('')}</ul>${old.length ? `<details><summary>Минулі (${old.length})</summary><ul class="list">${old.map(tripLi).join('')}</ul></details>` : ''}` : ''}
+  const fm = v => (v > 0 ? '+' : v < 0 ? '−' : '') + Math.abs(Math.round(v)).toLocaleString('uk-UA');
+  const bud = (data.budgets || []).map(b => `<h3>${esc(b.title)}</h3>${b.note ? `<p class="muted">${linkify(b.note)}</p>` : ''}${(b.months || []).map(m => { const tot = (m.rows || []).reduce((a, r) => a + (+r.v || 0), 0);
+    return `<details${m.open ? ' open' : ''}><summary><b>${esc(m.name)}</b>: <span style="color:var(${tot < 0 ? '--bad' : '--acc'})">${fm(tot)} ${esc(b.cur || '')}</span></summary><ul class="list">${(m.rows || []).map(r => `<li><div><b>${esc(r.t)}</b>${r.note ? `<small>${linkify(r.note)}</small>` : ''}</div><span style="${r.v < 0 ? 'color:var(--bad)' : ''}">${r.v == null ? '?' : fm(r.v)}</span></li>`).join('')}</ul>${m.note ? `<p class="muted">${linkify(m.note)}</p>` : ''}</details>`; }).join('')}`).join('');
+  shell(`${bud ? `<h1>Бюджет</h1>${bud}` : ''}${tr.length || old.length ? `<h1>Подорожі</h1><ul class="list">${tr.map(tripLi).join('')}</ul>${old.length ? `<details><summary>Минулі (${old.length})</summary><ul class="list">${old.map(tripLi).join('')}</ul></details>` : ''}` : ''}
     <h1>Цілі</h1>${ps.map(p => { const n = Logic.planNow(p, today), st = p.stages || [], ts = p.targets || [];
     const pct = t => t.now == null ? 0 : Math.min(1, t.now / t.goal);
     const avg = ts.length ? Math.round(100 * ts.reduce((a, t) => a + pct(t), 0) / ts.length) : 0;
