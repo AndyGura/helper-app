@@ -129,8 +129,8 @@ const Logic = (() => {
     const pr = r => { const b = r.prio || 2, s = sinceLast(data, r, day); if (b === 1 || r.days || s === Infinity) return b;
       if (urgency(r) >= 1 || s >= (r.every ? r.every * 2 : 7)) return 1.2;
       return s >= Math.max(4, r.every || 0) ? Math.max(1.5, b - 1) : b; };
-    const rest = el.filter(r => !r.fixed).sort((a, b) => (ds.has(b.id) - ds.has(a.id)) || (pr(a) - pr(b)) || (urgency(b) - urgency(a)) || (hash(a.id + day) - hash(b.id + day)));
-    const plan = new Set(el.filter(r => r.fixed).map(r => r.id));
+    const rest = el.filter(r => !r.fixed && r.kind !== 'meal').sort((a, b) => (ds.has(b.id) - ds.has(a.id)) || (pr(a) - pr(b)) || (urgency(b) - urgency(a)) || (hash(a.id + day) - hash(b.id + day)));
+    const plan = new Set(el.filter(r => r.fixed || r.kind === 'meal').map(r => r.id)); // meals never compete with the habit cap
     let n = 0, burst = false;
     for (const r of rest) { const p = pr(r), br = p === 1.2 && !burst;
       if (p === 1) { plan.add(r.id); continue; } // must-do: outside the cap

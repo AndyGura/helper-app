@@ -481,8 +481,8 @@ views.cal = () => {
     const pl = Logic.dayPlan(data, calSel), main = r => pl.has(r.id) || ids.has(r.id) || Logic.timeOn(data, calSel, r.id);
     const li = r => { const off = Logic.offOn(data, calSel, r.id), ahead = Logic.coveredAhead(data, r, calSel); return `<li class="${ids.has(r.id) || off || ahead ? 'done' : ''}" data-act="toggleRoutine" data-v="${calSel}|${r.id}"><span class="box"></span><div><b>${esc(r.title)}</b>${off ? `<small>${OFF[off]}</small>` : ahead ? '<small>зроблено наперед</small>' : !Logic.appliesOn(r, calSel, data) ? '<small>поза графіком (наперед)</small>' : ''}${r.goal || Logic.timeOn(data, calSel, r.id) ? `<small>${hm(Logic.timeOn(data, calSel, r.id))}${r.goal ? ' з ' + hm(r.goal * 6e4) : ''}</small>` : ''}</div>
       ${r.goal ? Object.keys(OFF).map(k => `<button class="mini ${off === k ? 'primary' : ''}" data-act="setOff" data-v="${calSel}|${r.id}|${k}" title="${OFF[k]}">${OFF[k].slice(0, 2)}</button>`).join('') : ''}</li>`; };
-    const others = data.routines.filter(r => !main(r));
-    const hs = data.routines.filter(main), meals = hs.filter(isMeal), habits = hs.filter(r => !isMeal(r));
+    const others = data.routines.filter(r => !main(r) && !isMeal(r));
+    const hs = data.routines.filter(main), habits = hs.filter(r => !isMeal(r)), meals = data.routines.filter(r => isMeal(r) && (main(r) || Logic.appliesOn(r, calSel, data)));
     return `${tasks.length ? '<h3>Справи</h3>' : ''}<ul class="list">
       ${tasks.map(t => `<li class="${t.done ? 'done' : ''}" data-act="${calSel < Logic.localDay() ? 'toggleTaskDone' : 'taskMenu'}" data-v="${calSel < Logic.localDay() ? t.id + '|' + calSel : t.id}"><span class="box"></span><div><b>${esc(t.title)}</b><small>${!t.done && t.due < calSel ? `справа · прострочено з ${+t.due.slice(8)}.${t.due.slice(5, 7)}` : 'справа'}</small></div></li>`).join('')}</ul>
       ${habits.length ? `<h3>Звички</h3><ul class="list">${habits.map(li).join('')}</ul>` : ''}
