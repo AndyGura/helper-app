@@ -506,7 +506,8 @@ views.settings = () => { const s = data.settings || {}; shell(`${teamHtml()}<but
 // ---------- Events ----------
 const acts = {
   agentsDone: async () => { const ids = [...$app.querySelectorAll('input[name=agent]:checked')].map(i => i.value);
-    if (data.settings?.ghRepo) await syncNow(); // never overwrite roles the data repo already has
+    const had = Agents.chosen(data); if (data.settings?.ghRepo) await syncNow(); // never overwrite roles the data repo already has
+    if (!had && Agents.chosen(data)) { tab = 'settings'; return render(); } // server already had roles/data: keep them, show the team list
     Agents.apply(data, ids, data.settings?.lang || 'uk'); tab = 'home'; await save(); render(); },
   key: v => { const el = document.getElementById('pin'); el.value = v === 'back' ? el.value.slice(0, -1) : (el.value + v).slice(0, 6); },
   bonus: () => { skipped = []; next(true); }, // declined items come back in bonus mode

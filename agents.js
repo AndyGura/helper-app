@@ -30,7 +30,8 @@ const Agents = (() => {
   };
   const tr = (o, lang) => o[lang] || o.uk || o.en;
   const ui = lang => UI[lang] || UI.uk;
-  const chosen = data => (data.roles || []).some(r => r.id === 'r_manager');
+  // Onboarding only for a brand-new user: any existing roles or data (tasks, habits, notes) means skip it.
+  const chosen = data => (data.roles || []).length > 0 || ['tasks', 'routines', 'inbox', 'memos'].some(k => (data[k] || []).length);
   // Selected agents become active `roles` items; deselected ones are retired (hidden). The manager can't be deselected.
   // Agents in the data repo read active roles and run the role-creation checklist for any role without a registry row.
   function apply(data, ids, lang = 'uk', now = Date.now()) {
