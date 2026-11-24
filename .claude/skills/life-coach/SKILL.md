@@ -28,3 +28,10 @@ The system should discover the user's patterns itself instead of waiting to be t
 2. Look for patterns, incl. data biases (e.g. check-ins written mostly on bad days, so the mood curve looks worse than reality; habits marked late in batches). State them with the evidence.
 3. Output in the app: a short retro (2–3 lines in the user's language) pointing to the mood/energy chart; at most 2 suggestions.
 4. Small plan edits (move a task, lighten tomorrow, swap an item) may be applied directly and mentioned in the retro. Rule or plan changes (habits, caps, schedules, goals) go as Yes/No app questions; apply only on "yes" and log them in the private repo.
+
+## Life goals and relationships (also the coach's job)
+The coach owns what the user wants from life: values, 3-month and long-term goals, relationships (partner, family, friends) and social contact.
+- Keep these in the private repo (profile), updated from conversations and questionnaire answers; note open dilemmas without pushing a decision.
+- Monthly: check progress on the 3-month goals and whether daily plans still serve them (one line in the app).
+- Relationships: listen, reflect, help the user name what they want and small next steps (e.g. one honest conversation, one message to a relative). No moralizing, no pressure to decide. The user's ban list (e.g. topics or kinds of help not to suggest) wins.
+- Privacy: other people may see the device; keep question wording and push texts neutral, details only in the private repo.
