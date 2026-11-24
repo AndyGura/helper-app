@@ -95,7 +95,7 @@ document.addEventListener('visibilitychange', () => {
 // Chat tab hidden for now (API is billed separately); code kept in chat.js.
 const TABS = [['home', 'Головна'], ['cal', 'Календар'], ['shop', 'Покупки'], ['tasks', 'Справи'], ['plan', '🎯'], ['settings', '⚙️']];
 const shell = body => {
-  $app.innerHTML = `<div class="page">${body}</div><nav>${TABS.map(([k, t]) =>
+  $app.innerHTML = `<div class="page">${body}</div>${sheetTask ? taskSheet() : ''}<nav>${TABS.map(([k, t]) =>
     `<button data-act="tab" data-v="${k}" class="${k === tab ? 'on' : ''}">${t}</button>`).join('')}</nav>`;
 };
 
@@ -234,16 +234,32 @@ views.shop = () => {
 };
 
 // ---------- Tasks & routines ----------
+// Tap on a task opens an action sheet (never marks done by accident); long text lives in a separate details view.
+let sheetTask = null, infoTask = null;
+const taskMeta = t => [t.due && ddm(t.due), t.monthly && `${t.months === 3 ? 'щокварталу' : t.months > 1 ? `кожні ${t.months} міс.` : 'щомісяця'} ${t.monthly}-го`, t.minutes && t.minutes + ' хв', (t.details || t.link || t.title.length > 80) && 'є подробиці'].filter(Boolean).join(' · ');
+function taskSheet() { const t = data.tasks.find(x => x.id === sheetTask); if (!t) { sheetTask = null; return ''; }
+  return `<div class="sheetbg" data-act="sheetClose"><div class="sheetbox" data-act="noop"><p class="clamp"><b>${esc(t.title)}</b></p>${t.due ? `<p class="muted">до ${ddm(t.due)}</p>` : ''}
+    ${t.done ? `<button class="primary" data-act="taskUndo" data-v="${t.id}">↩ Повернути в справи</button>` : `<button class="primary" data-act="taskDone" data-v="${t.id}">✓ Відмітити зробленим</button>`}
+    <button data-act="taskInfo" data-v="${t.id}">Подробиці</button>
+    <div class="row"><button data-act="taskEdit" data-v="${t.id}">✎ Змінити</button><button class="danger" data-act="delTask" data-v="${t.id}">Видалити</button></div>
+    <button data-act="sheetClose">Закрити</button></div></div>`; }
+views.taskInfo = () => { const t = data.tasks.find(x => x.id === infoTask); if (!t) { tab = 'tasks'; return views.tasks(); }
+  shell(`<div class="row cal-head"><button data-act="tab" data-v="tasks">‹</button><h1>Справа</h1></div>
+    <p><b>${linkify(t.title)}</b></p><p class="muted">${[t.done ? 'зроблено' : '', taskMeta(t).replace(/ · є подробиці|є подробиці/, '')].filter(Boolean).join(' · ')}</p>
+    ${t.details ? `<p>${linkify(t.details)}</p>` : ''}${t.link ? `<p class="note">${linkify(t.link)}</p>` : ''}
+    ${t.done ? `<button data-act="taskUndo" data-v="${t.id}">↩ Повернути в справи</button>` : `<button class="primary" data-act="taskDone" data-v="${t.id}">✓ Відмітити зробленим</button>`}
+    <button data-act="taskEdit" data-v="${t.id}">✎ Змінити</button>`); };
+
 views.tasks = () => {
   const open = data.tasks.filter(t => !t.done).sort((a, b) => (a.due || '9') < (b.due || '9') ? -1 : 1);
   const today = Logic.doneSet(data, Logic.localDay());
-  const taskLi = t => t.id === editId ? `<li class="edit">${taskFormHtml(t)}</li>` : `<li data-act="toggleTask" data-v="${t.id}"><span class="box"></span>
-      <div><b>${t.focus ? '★ ' : ''}${esc(t.title)}</b><small>${[t.due, t.monthly && `${t.months === 3 ? 'щокварталу' : t.months > 1 ? `кожні ${t.months} міс.` : 'щомісяця'} ${t.monthly}-го`, t.minutes && t.minutes + ' хв'].filter(Boolean).join(' · ')}</small>${t.link ? `<small class="note">${linkify(t.link)}</small>` : ''}</div>
-      <button class="x" data-act="edit" data-v="${t.id}">✎</button><button class="x" data-act="delTask" data-v="${t.id}">✕</button></li>`;
+  const taskLi = t => t.id === editId ? `<li class="edit">${taskFormHtml(t)}</li>` : `<li class="${t.done ? 'done' : ''}" data-act="taskMenu" data-v="${t.id}"><span class="box"></span>
+      <div><b class="clamp">${t.focus ? '★ ' : ''}${esc(t.title)}</b><small>${taskMeta(t)}</small></div></li>`;
+  const ld = Logic.localDay(), doneToday = data.tasks.filter(t => t.done && t.doneAt && Logic.localDay(new Date(t.doneAt)) === ld); // done ones stay until tomorrow
   const top = open.slice(0, 3), later = open.slice(3);
   const routineLi = routineLiFactory(today);
   const plan = Logic.dayPlan(data, Logic.localDay()), inPlan = data.routines.filter(r => plan.has(r.id)), rest = data.routines.filter(r => !plan.has(r.id));
-  shell(`<h1>Справи</h1><ul class="list">${top.map(taskLi).join('') || '<p class="muted">Немає справ</p>'}</ul>
+  shell(`<h1>Справи</h1><ul class="list">${top.map(taskLi).join('') || '<p class="muted">Немає справ</p>'}${doneToday.map(taskLi).join('')}</ul>
     ${later.length ? `<details ${later.some(t => t.id === editId) ? 'open' : ''}><summary>Пізніше (${later.length})</summary><ul class="list">${later.map(taskLi).join('')}</ul></details>` : ''}
     ${taskFormHtml()}
     <h1>Сьогодні</h1><p class="muted">Обов'язкові — завжди. Решта: до ${Logic.dailyCap(data, Logic.localDay())} на день${Logic.isKidsWeek(data, Logic.localDay()) ? ' (тиждень з дітьми)' : ''}.</p>
@@ -256,6 +272,7 @@ function taskFormHtml(t) { const v = k => t?.[k] != null ? `value="${esc(String(
     <form data-form="${t ? 'saveTask' : 'addTask'}" class="add">${t ? `<input type="hidden" name="id" value="${t.id}">` : ''}
       <input name="title" placeholder="Нова справа" required ${v('title')}>
       <div class="row"><input name="due" type="date" ${v('due')}><input name="minutes" type="number" min="1" placeholder="хв" ${v('minutes')}></div>
+      <textarea name="details" rows="2" placeholder="Подробиці (необов'язково)">${esc(t?.details || '')}</textarea>
       <input name="monthly" type="number" min="1" max="31" placeholder="Щомісяця, число (необов'язково)" ${v('monthly')}>
       <label><input name="focus" type="checkbox" ${t?.focus ? 'checked' : ''}> Фокус ★</label>
       <button class="primary">${t ? 'Зберегти' : 'Додати'}</button>${t ? '<button type="button" data-act="edit" data-v="">Скасувати</button>' : ''}</form>`; }
@@ -387,7 +404,7 @@ views.trip = () => {
     ${t.route || t.stay ? `<h3>Дорога і житло</h3>${t.route ? `<p>🚗 ${linkify(t.route)}</p>` : ''}${t.stay ? `<p>🏠 ${linkify(t.stay)}</p>` : ''}` : ''}
     ${(t.days || []).length ? `<h3>По днях</h3>${t.days.map(d => `<p><b>${d.date ? `${wd(d.date)} ${dm(d.date)}` : esc(d.title || '')}</b>${d.date && d.title ? ' · ' + esc(d.title) : ''}</p><ul class="hint">${(d.items || []).map(i => `<li>${i.private ? '🔒 ' : ''}${linkify(itxt(i))}</li>`).join('')}</ul>`).join('')}` : ''}
     ${(t.budget || []).length ? `<h3>Бюджет: ${sum} ${esc(cur)}</h3><ul class="list">${t.budget.map(b => `<li class="${b.paid ? 'done' : ''}"><div><b>${lk(b)}${esc(b.item)}</b>${b.paid ? '<small>оплачено</small>' : ''}</div><span>${b.sum ?? '?'} ${esc(cur)}</span></li>`).join('')}</ul>` : ''}
-    ${tasks.length ? `<h3>Справи</h3><ul class="list">${tasks.map(x => `<li class="${x.done ? 'done' : ''}" data-act="toggleTaskDone" data-v="${x.id}|${Logic.localDay()}"><span class="box"></span><div><b>${lk(x)}${esc(x.title)}</b>${x.due ? `<small>до ${dm(x.due)}</small>` : ''}</div></li>`).join('')}</ul>` : ''}
+    ${tasks.length ? `<h3>Справи</h3><ul class="list">${tasks.map(x => `<li class="${x.done ? 'done' : ''}" data-act="taskMenu" data-v="${x.id}"><span class="box"></span><div><b>${lk(x)}${esc(x.title)}</b>${x.due ? `<small>до ${dm(x.due)}</small>` : ''}</div></li>`).join('')}</ul>` : ''}
     ${pk.length ? `<h3>Речі (${pk.filter(i => i.done).length}/${pk.length})</h3><ul class="list">${pk.map(i => `<li class="${i.done ? 'done' : ''}" data-act="packTog" data-v="${t.id}|${i.id}"><span class="box"></span><div><b>${lk(i)}${esc(i.t)}</b></div></li>`).join('')}</ul>` : ''}
     <button data-act="printTrip" data-v="${t.id}">📄 PDF / друк</button>
     <form data-form="packAdd" class="add"><input type="hidden" name="id" value="${t.id}"><div class="row"><input name="t" placeholder="Додати річ" required><button class="primary" style="flex:0 0 64px">+</button></div></form>`);
@@ -533,6 +550,12 @@ const acts = {
     i.done = !i.done; Logic.touch(t); await save(); render(); },
   toggleShop: async v => { const i = data.shopping.find(x => x.id === v); i.done = !i.done; i.doneAt = new Date().toISOString(); Logic.touch(i); await save(); render(); },
   toggleTask: async v => { Logic.markDone(data, { kind: 'task', id: v }); await save(); render(); },
+  taskMenu: v => { sheetTask = v; render(); },
+  sheetClose: () => { sheetTask = null; render(); }, noop: () => {},
+  taskDone: async v => { Logic.markDone(data, { kind: 'task', id: v }); sheetTask = null; await save(); render(); },
+  taskUndo: async v => { const t = data.tasks.find(x => x.id === v); if (t) { t.done = false; delete t.doneAt; Logic.touch(t); } sheetTask = null; await save(); render(); },
+  taskInfo: v => { infoTask = v; sheetTask = null; tab = 'taskInfo'; render(); },
+  taskEdit: v => { editId = v; sheetTask = null; tab = 'tasks'; render(); document.querySelector('li.edit')?.scrollIntoView({ block: 'center' }); },
   dismissMemo: async v => { Logic.remove(data, 'memos', v); await save(); render(); },
   hideNote: v => { try { const k = 'hidden-' + Logic.localDay(); localStorage.setItem(k, JSON.stringify([...hiddenNotes(), v])); } catch {} render(); },
   dismiss: async v => { Logic.remove(data, 'inbox', v); await save(); render(); },
@@ -545,7 +568,7 @@ const acts = {
   qLater: v => { qLater.push(v); render(); },
   edit: v => { editId = v || null; render(); },
   timerGoal: v => { const t = timers().find(x => x.id === v), r = t && data.routines.find(x => x.id === t.ref); if (!r) return; clearInterval(tick); logTime(t); const left = r.goal * 6e4 - Logic.timeOn(data, Logic.localDay(), r.id); if (left > 0) Logic.addTime(data, Logic.localDay(), r.id, left); finishTimer(v); },
-  delTask: async v => { Logic.remove(data, 'tasks', v); await save(); render(); },
+  delTask: async v => { if (!confirm('Видалити справу?')) return; Logic.remove(data, 'tasks', v); sheetTask = null; await save(); render(); },
   delRoutine: async v => { if (!confirm('Видалити звичку?')) return; Logic.remove(data, 'routines', v); await save(); render(); },
   export: async () => { await navigator.clipboard.writeText(JSON.stringify(data)); alert('Скопійовано'); },
   import: async () => {
@@ -578,7 +601,7 @@ const forms = {
   visitAdd: f => { const v = (data.visits || []).find(x => x.id === f.id); if (!v) return; (v.items = v.items || []).push({ id: Logic.id(), t: f.t.trim(), kind: f.kind, done: false }); Logic.touch(v); },
   visitResult: f => { const v = (data.visits || []).find(x => x.id === f.id); if (!v) return; v.result = f.result.trim(); Logic.touch(v); },
   packAdd: f => { const t = (data.trips || []).find(x => x.id === f.id); if (!t) return; (t.packing = t.packing || []).push({ id: Logic.id(), t: f.t.trim(), done: false }); Logic.touch(t); },
-  addTask: f => data.tasks.push({ u: Date.now(), id: Logic.id(), title: f.title.trim(), ...monthlyFields(f), minutes: num(f.minutes), focus: !!f.focus, done: false }),
+  addTask: f => data.tasks.push({ u: Date.now(), id: Logic.id(), title: f.title.trim(), details: f.details?.trim() || undefined, ...monthlyFields(f), minutes: num(f.minutes), focus: !!f.focus, done: false }),
   settings: f => { data.settings = { ...data.settings, ...f }; Chat.resetContext(); },
   addRoutine: f => data.routines.push(routineFrom(f, { id: Logic.id() })),
   saveRoutine: f => { const i = data.routines.findIndex(r => r.id === f.id); if (i >= 0) data.routines[i] = routineFrom(f, data.routines[i]); editId = null; },
@@ -589,7 +612,7 @@ const forms = {
     let ok = false; try { const b = atob(k.replace(/-/g, '+').replace(/_/g, '/') + '='.repeat((4 - k.length % 4) % 4)); ok = b.length === 65 && b.charCodeAt(0) === 4; } catch {}
     if (!ok) { vapidMsg = { ok: false, text: 'Це не схоже на ключ VAPID. Скопіюй увесь рядок Public key з Pi (≈87 символів).' }; return; }
     data.settings = { ...data.settings, vapid: k }; vapidMsg = { ok: true, text: 'Ключ збережено ✓ Тепер натисни «Увімкнути нагадування».' }; },
-  saveTask: f => { const t = data.tasks.find(x => x.id === f.id); if (t) Object.assign(t, { u: Date.now(), title: f.title.trim(), ...monthlyFields(f), minutes: num(f.minutes), focus: !!f.focus }); editId = null; },
+  saveTask: f => { const t = data.tasks.find(x => x.id === f.id); if (t) Object.assign(t, { u: Date.now(), title: f.title.trim(), details: f.details?.trim() || undefined, ...monthlyFields(f), minutes: num(f.minutes), focus: !!f.focus }); editId = null; },
 };
 // Monthly day (1–31) without a date → due on the next such day (today counts).
 function monthlyFields(f) { const m = Math.min(31, Math.max(0, Math.round(num(f.monthly) || 0))) || undefined;

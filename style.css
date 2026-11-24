@@ -62,3 +62,5 @@ li.edit{display:block}li.edit form{width:100%}
 @page{size:A4;margin:14mm}
 @media print{body{background:#fff}.noprint,nav{display:none!important}.sheet{max-width:none;margin:0;padding:0}}
 button:active:not(:disabled),.btn:active{filter:brightness(.8);transform:scale(.97)}button{transition:transform .08s,filter .08s}button:disabled{opacity:.6}
+.clamp{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.sheetbg{position:fixed;inset:0;background:#000a;z-index:20;display:flex;align-items:flex-end}.sheetbox{background:var(--bg);width:100%;max-width:560px;margin:0 auto;border-radius:18px 18px 0 0;padding:16px 16px calc(16px + env(safe-area-inset-bottom))}.sheetbox p{margin:4px 0 10px}
