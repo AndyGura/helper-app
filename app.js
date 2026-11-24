@@ -13,7 +13,7 @@ async function syncNow(quiet = true) {
   try { if (await Sync.sync(data)) { await Vault.save(data); render(); } if (!quiet) alert('Синхронізовано'); }
   catch (e) { if (!quiet) alert('Помилка синхронізації: ' + e.message); }
 }
-function render() { data ? (views[tab](), restoreDrafts()) : lockView(); }
+function render() { data ? ((tab === 'agents' || (!Agents.chosen(data) && tab !== 'settings') ? views.agents() : views[tab]()), restoreDrafts()) : lockView(); }
 // Unsent text survives a lock/reload: drafts live in data.drafts (encrypted vault, never synced), keyed by form + item id + field.
 const DRAFT_SKIP = new Set(['settings', 'timer']);
 const draftKey = el => { const f = el.form, n = el.name || el.id; if (!n || el.type === 'password' || el.type === 'hidden' || el.id === 'imp' || (f && DRAFT_SKIP.has(f.dataset.form))) return null;
@@ -477,7 +477,12 @@ views.chat = () => {
 const PUSH_EP = 'pushEndpoint', vapidKey = () => (data.settings?.vapid || data.push?.vapid || '').trim();
 // Read-only "team": the assistant's roles (maintained by the agents in the data repo): emoji, name, purpose, next step.
 const teamHtml = () => (rs => rs.length ? `<h3>Команда помічника</h3><ul class="list">${rs.map(r => `<li class="${r.status === 'paused' ? 'done' : ''}"><span>${esc(r.emoji || '•')}</span><div><b>${esc(r.name)}</b><small>${esc(r.about || '')}</small>${r.next ? `<small>Далі: ${esc(r.next)}${r.date ? ' · ' + ddm(r.date) : ''}</small>` : ''}</div></li>`).join('')}</ul>` : '')((data.roles || []).filter(r => r.status !== 'retired'));
-views.settings = () => { const s = data.settings || {}; shell(`${teamHtml()}<h1>Налаштування</h1>
+// Onboarding: pick which agents (roles) to enable. Shown until the manager role exists; reopened from settings.
+views.agents = () => { const L = data.settings?.lang || 'uk', T = Agents.ui(L), act = new Set((data.roles || []).filter(r => r.status !== 'retired').map(r => r.id));
+  $app.innerHTML = `<div class="page"><h1>${esc(T.title)}</h1><p class="muted">${esc(T.intro)}</p><ul class="list">${Agents.CATALOG.map(a =>
+    `<li><label class="pick"><input type="checkbox" name="agent" value="${a.id}" ${a.required ? 'checked disabled' : act.has(a.id) ? 'checked' : ''}><span>${a.emoji}</span><div><b>${esc(Agents.tr(a.name, L))}</b>${a.required ? ` <small>· ${esc(T.always)}</small>` : ''}<small>${esc(Agents.tr(a.about, L))}</small></div></label></li>`).join('')}</ul>
+    <button class="primary" data-act="agentsDone">${esc(T.done)}</button>${Agents.chosen(data) ? '' : `<button data-act="tab" data-v="settings">${esc(T.have)}</button>`}</div>`; };
+views.settings = () => { const s = data.settings || {}; shell(`${teamHtml()}<button data-act="tab" data-v="agents">${esc(Agents.ui(s.lang || 'uk').change)}</button><h1>Налаштування</h1>
   <button data-act="lock">Заблокувати</button>
   ${localStorage.getItem(CRED) ? '<button data-act="faceOff">Вимкнути Face ID</button>' : '<button data-act="faceEnable">Увімкнути Face ID</button>'}
   <h3>Репозиторій з даними</h3>
@@ -500,6 +505,9 @@ views.settings = () => { const s = data.settings || {}; shell(`${teamHtml()}<h1>
 
 // ---------- Events ----------
 const acts = {
+  agentsDone: async () => { const ids = [...$app.querySelectorAll('input[name=agent]:checked')].map(i => i.value);
+    if (data.settings?.ghRepo) await syncNow(); // never overwrite roles the data repo already has
+    Agents.apply(data, ids, data.settings?.lang || 'uk'); tab = 'home'; await save(); render(); },
   key: v => { const el = document.getElementById('pin'); el.value = v === 'back' ? el.value.slice(0, -1) : (el.value + v).slice(0, 6); },
   bonus: () => { skipped = []; next(true); }, // declined items come back in bonus mode
   pushOn: async () => {

@@ -9,6 +9,12 @@ The user's private data repo keeps one registry file (e.g. `roles.md`) with one 
 - Mirror for the user: the app's `roles` collection in the synced data file (`{id, u, emoji, name, about (one line, the user's language), status, next, date}`), shown read-only in Settings. Update it (bump `u`) whenever the registry row changes.
 - The next step is always concrete and small (one action, ≤1 app item), with a date.
 
+## Which roles are on
+The user picks agents in the app on first start (catalog in `agents.js`; the manager is always on). Each pick becomes a `roles` item with `skill` and `status: active`; a deselected role becomes `retired`. On every review: an active `roles` item without a registry row → run the creation checklist below (first visible step within 24 h); a retired one → stop its scheduled work and mark its row retired.
+
+## Local specifics are config
+Skills here stay country-neutral. Tax calendars, banks and their APIs, labs, public holidays, language and currency belong to the user's private layer (a private skill with the same name, or a config file there). Never hard-code them in this repo.
+
 ## Review walk (every scheduled review, morning and evening)
 For each `active` role:
 1. If `next date` ≤ today: do the step now if an agent can (compute, draft, add tasks/questions), or surface it as ONE app line prefixed with the role name, e.g. "Фінанси: …". Then set a new next step + date.

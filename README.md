@@ -8,6 +8,7 @@ Generic, local-first PWA. No build step, no backend, no personal data in code.
 
 - Face ID: optional WebAuthn platform passkey checked before the PIN (local gate; the PIN still derives the key).
 - `github.js` — syncs app data to `data/app.json` in a private data repo via a fine-grained token (settings, chat, timer stay on device).
+- `agents.js` — onboarding catalog of agents (roles) the user picks on first start; the manager is always on. Localizable text, no country rules. Skills: `.claude/skills/`.
 - `chat.js` — Claude chat from the browser with your own API key (Opus 5.5 or Haiku 5.5), context from repo files, tools: add task / shopping item / journal note.
 
 Run locally: `python3 -m http.server`. Hosted on GitHub Pages from `main` (root). Personal data never lives here: import it via Налаштування → Імпорт.
