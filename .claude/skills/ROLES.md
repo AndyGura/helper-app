@@ -7,6 +7,7 @@ The user's private data repo keeps one registry file (e.g. `roles.md`) with one 
 `role | skill | status (active/paused/retired) | cadence | last visible step (date: what the user saw) | next step | next date`
 - "Visible step" = something the user actually sees in the helper app (inbox note, task, question, plan/trip/budget screen). Files in a repo do not count.
 - Mirror for the user: the app's `roles` collection in the synced data file (`{id, u, emoji, name, about (one line, the user's language), status, next, date}`), shown read-only in Settings. Update it (bump `u`) whenever the registry row changes.
+- Dashboards: every active role gets a screen in the app menu automatically. Tag every item a role creates (task, habit, inbox note, plan…) with `role: <role id>` so it shows there. App usage stats (`usage`: opens per screen per day) are input for the manager's weekly pass.
 - The next step is always concrete and small (one action, ≤1 app item), with a date.
 
 ## Which roles are on
