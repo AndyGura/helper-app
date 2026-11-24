@@ -456,10 +456,11 @@ async function loadMood() {
   const days = [...Array(14)].map((_, i) => Logic.localDay(new Date(Date.now() - (13 - i) * 864e5)));
   const by = Object.fromEntries(moodCache.map(r => [r[0], r]));
   const bar = (v, cls) => `<i class="${cls}" style="height:${(+v || 0) * 8}px"></i>`;
-  // Days without a check-in row: energy guessed from done habits/tasks (hollow bar). Rows with src=tasks were inferred by the coach.
+  // Check-ins skew to bad/boring days; good days often have none. Days without a check-in row: energy guessed from done habits/tasks (hollow bar). Rows with src=tasks were inferred by the coach.
   const en = d => by[d]?.[2] ? [by[d][2], by[d][6] === 'tasks' ? 'e g' : 'e'] : [Logic.energyGuess(data, d), 'e g'];
-  if (el()) el().innerHTML = `<h3>Настрій і сили, 14 днів</h3><div class="moodchart">${days.map(d => { const [v, c] = en(d); return `<div>${bar(by[d]?.[1], 'm')}${bar(v, c)}<span>${+d.slice(8)}</span></div>`; }).join('')}</div>
-    <p class="muted"><b class="lm">■</b> настрій <b class="le">■</b> сили з чек-інів <b class="le">□</b> сили за виконаними справами (1–5)</p>`;
+  if (el()) el().innerHTML = `<h3>Настрій і сили, 14 днів</h3><div class="moodchart">${days.map(d => { const [v, c] = en(d); const mo = by[d]?.[1] ? [by[d][1], 'm'] : v ? [Math.max(3, v), 'm g'] : [0, 'm']; // no check-in usually means an OK day, not a bad one
+      return `<div>${bar(mo[0], mo[1])}${bar(v, c)}<span>${+d.slice(8)}</span></div>`; }).join('')}</div>
+    <p class="muted"><b class="lm">■</b> настрій <b class="le">■</b> сили з чек-інів <b class="le">□</b> оцінка за виконаними справами, без чек-іну (1–5)</p>`;
 }
 
 // ---------- Chat ----------
