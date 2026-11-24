@@ -104,7 +104,7 @@ let navCache = null; // computed once per app start, so buttons don't jump aroun
 function navTabs() { if (navCache) return navCache;
   const u = data.usage || {}, from = Logic.localDay(new Date(Date.now() - 30 * 864e5)), n = {};
   for (const [d, m] of Object.entries(u)) if (d >= from) for (const [k, c] of Object.entries(m)) n[k] = (n[k] || 0) + c;
-  const label = k => k.startsWith('role:') ? (data.roles || []).find(r => 'role:' + r.id === k)?.emoji : ({ tasks: 'Справи', shop: 'Покупки', cal: 'Календар', plan: '🎯', visits: '🩺', settings: '⚙️' })[k];
+  const label = k => k.startsWith('role:') ? (data.roles || []).find(r => 'role:' + r.id === k)?.emoji : ({ tasks: 'Справи', shop: 'Покупки', cal: 'Сьогодні', plan: '🎯', visits: '🩺', settings: '⚙️' })[k];
   const def = ['tasks', 'shop', 'cal'], cand = [...new Set([...Object.keys(n), ...def])].filter(k => label(k) && k !== 'home' && k !== 'menu');
   const top = cand.sort((a, b) => (n[b] || 0) - (n[a] || 0) || (def.indexOf(a) + 1 || 9) - (def.indexOf(b) + 1 || 9)).slice(0, 3);
   return navCache = [['home', 'Головна'], ...top.map(k => [k, label(k)]), ['menu', '☰']];
@@ -457,7 +457,12 @@ views.trip = () => {
 // ---------- Calendar: habit marks + tasks by due date ----------
 const OFF = { vacation: '🌴 відпустка', sick: '🤒 лікарняний' };
 const MONTHS = ['Січень', 'Лютий', 'Березень', 'Квітень', 'Травень', 'Червень', 'Липень', 'Серпень', 'Вересень', 'Жовтень', 'Листопад', 'Грудень'];
+// "Сьогодні" (tab key stays `cal`): everything for one day (default today), split into tasks / habits / meals;
+// arrows switch the day, «Календар» opens the month grid and mood chart. Meals = habits with kind 'meal' or the nutrition role.
+let showMonth = false;
+const isMeal = r => r.kind === 'meal' || r.role === 'r_nutrition';
 views.cal = () => {
+  if (!calSel) calSel = Logic.localDay();
   const y = calMonth.getFullYear(), m = calMonth.getMonth(), today = Logic.localDay();
   const key = d => `${y}-${String(m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
   const n = new Date(y, m + 1, 0).getDate(), lead = (new Date(y, m, 1).getDay() + 6) % 7;
@@ -477,15 +482,21 @@ views.cal = () => {
     const li = r => { const off = Logic.offOn(data, calSel, r.id), ahead = Logic.coveredAhead(data, r, calSel); return `<li class="${ids.has(r.id) || off || ahead ? 'done' : ''}" data-act="toggleRoutine" data-v="${calSel}|${r.id}"><span class="box"></span><div><b>${esc(r.title)}</b>${off ? `<small>${OFF[off]}</small>` : ahead ? '<small>зроблено наперед</small>' : !Logic.appliesOn(r, calSel, data) ? '<small>поза графіком (наперед)</small>' : ''}${r.goal || Logic.timeOn(data, calSel, r.id) ? `<small>${hm(Logic.timeOn(data, calSel, r.id))}${r.goal ? ' з ' + hm(r.goal * 6e4) : ''}</small>` : ''}</div>
       ${r.goal ? Object.keys(OFF).map(k => `<button class="mini ${off === k ? 'primary' : ''}" data-act="setOff" data-v="${calSel}|${r.id}|${k}" title="${OFF[k]}">${OFF[k].slice(0, 2)}</button>`).join('') : ''}</li>`; };
     const others = data.routines.filter(r => !main(r));
-    return `<h3>${calSel}</h3><ul class="list">${data.routines.filter(main).map(li).join('')}
-      ${tasks.map(t => `<li class="${t.done ? 'done' : ''}" data-act="toggleTaskDone" data-v="${t.id}|${calSel}"><span class="box"></span><div><b>${esc(t.title)}</b><small>${!t.done && t.due < calSel ? `справа · прострочено з ${+t.due.slice(8)}.${t.due.slice(5, 7)}` : 'справа'}</small></div></li>`).join('')}</ul>
+    const hs = data.routines.filter(main), meals = hs.filter(isMeal), habits = hs.filter(r => !isMeal(r));
+    return `${tasks.length ? '<h3>Справи</h3>' : ''}<ul class="list">
+      ${tasks.map(t => `<li class="${t.done ? 'done' : ''}" data-act="${calSel < Logic.localDay() ? 'toggleTaskDone' : 'taskMenu'}" data-v="${calSel < Logic.localDay() ? t.id + '|' + calSel : t.id}"><span class="box"></span><div><b>${esc(t.title)}</b><small>${!t.done && t.due < calSel ? `справа · прострочено з ${+t.due.slice(8)}.${t.due.slice(5, 7)}` : 'справа'}</small></div></li>`).join('')}</ul>
+      ${habits.length ? `<h3>Звички</h3><ul class="list">${habits.map(li).join('')}</ul>` : ''}
+      ${meals.length ? `<h3>🍽 Їжа</h3><ul class="list">${meals.map(li).join('')}</ul>` : ''}
       ${others.length ? `<details><summary>Інші звички — відмітити заднім числом (${others.length})</summary><ul class="list">${others.map(li).join('')}</ul></details>` : ''}`;
   })();
-  shell(`<div class="row cal-head"><button data-act="calMove" data-v="-1">‹</button><h1>${MONTHS[m]} ${y}</h1><button data-act="calMove" data-v="1">›</button></div>
+  const ld = Logic.localDay(), dd = new Date(calSel + 'T12:00:00'), dl = calSel === ld ? 'Сьогодні' : `${WD[dd.getDay()]} ${ddm(calSel)}`;
+  shell(`<div class="row cal-head"><button data-act="dayMove" data-v="-1">‹</button><h1>${dl}</h1><button data-act="dayMove" data-v="1">›</button></div>
+    <div class="row"><button data-act="monthToggle">📅 ${showMonth ? 'Сховати календар' : 'Календар'}</button>${calSel !== ld ? `<button data-act="calDay" data-v="${ld}">Сьогодні</button>` : ''}</div>
+    ${showMonth ? `<div class="row cal-head"><button data-act="calMove" data-v="-1">‹</button><h3 style="text-align:center;flex:1;margin:0">${MONTHS[m]} ${y}</h3><button data-act="calMove" data-v="1">›</button></div>
     <div class="cal">${['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Нд'].map(w => `<span>${w}</span>`).join('')}${cells.join('')}</div>
     <div id="mood"></div>
-    <p class="muted">Заливка дня = частка виконаних звичок, крапка = справа з дедлайном. Натисни день, потім пункт, щоб відмітити.</p>${sel || ''}`);
-  loadMood();
+    <p class="muted">Заливка дня = частка виконаних звичок, крапка = справа з дедлайном.</p>` : ''}${sel || ''}`);
+  if (showMonth) loadMood();
 };
 
 // Mood chart: last 14 days from journal/mood.csv (scores inferred by the coach from check-ins).
@@ -584,7 +595,9 @@ const acts = {
   newChat: async () => { data.chat = []; Chat.resetContext(); await save(); render(); },
   syncNow: () => syncNow(false),
   calMove: v => { calMonth = new Date(calMonth.getFullYear(), calMonth.getMonth() + +v, 1); render(); },
-  calDay: v => { calSel = v; render(); },
+  calDay: v => { calSel = v; const d = new Date(v + 'T12:00:00'); calMonth = new Date(d.getFullYear(), d.getMonth(), 1); render(); },
+  dayMove: v => { const d = new Date((calSel || Logic.localDay()) + 'T12:00:00'); d.setDate(d.getDate() + +v); acts.calDay(Logic.localDay(d)); },
+  monthToggle: () => { showMonth = !showMonth; render(); },
   tab: v => { tab = v; render(); },
   other: () => { skipped.push(current.id); next(); },
   done: async () => { Logic.markDone(data, current); current = null; await save(); next(); },
