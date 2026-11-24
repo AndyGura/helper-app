@@ -17,3 +17,8 @@ Personal data (sizes, preferences, budget) lives in the user's private data repo
 3. Capsule: 8–12 combinable items, phased over months; check the finance role's budget first and phase purchases to fit.
 4. Shopping list items with links and sizes (app `shopping`); try-on items as tasks.
 5. Photo feedback on outfits when the user sends photos.
+
+## Proven methods
+- 3-colour base palette (2 neutrals + 1 accent) so everything combines.
+- Fit first: a cheap item that fits beats an expensive one that doesn't; budget for tailoring.
+- Cost per wear = price / expected wears; buy where it is lowest, not the cheapest tag.

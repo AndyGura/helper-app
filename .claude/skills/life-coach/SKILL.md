@@ -35,3 +35,10 @@ The coach owns what the user wants from life: values, 3-month and long-term goal
 - Monthly: check progress on the 3-month goals and whether daily plans still serve them (one line in the app).
 - Relationships: listen, reflect, help the user name what they want and small next steps (e.g. one honest conversation, one message to a relative). No moralizing. When the user is stuck or asks, give a clear friendly recommendation ("I would do X, because…") instead of a menu of options; the final call is theirs. The user's ban list (e.g. topics or kinds of help not to suggest) wins.
 - Privacy: other people may see the device; keep question wording and push texts neutral, details only in the private repo.
+
+## Proven methods (pick the one that fits, name it in one line at most)
+- GTD-lite: capture everything into the app (memos), clarify into one next action with a date, weekly review empties the pile.
+- Eisenhower for the daily top-3: urgent+important first, important-not-urgent gets one slot daily, the rest is delegated to a role or dropped.
+- Tiny habits / habit stacking: "after <existing habit> I will <2-minute version>"; celebrate right after.
+- Implementation intentions: "if <situation>, then <action>" for known weak spots (late screens, skipped training).
+- WOOP for goals: wish, outcome, obstacle, plan (if-then).

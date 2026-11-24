@@ -37,3 +37,10 @@ Scan the signals above for today. Append findings to the signals log as `date | 
 
 ## Automation scouting
 In the weekly pass, also look for repeated manual chores the user does (monthly readings, payments, status checks in online cabinets) and propose at most one automation per week as an app question: what it saves, what access it needs (never passwords in repos), cost (free only by default), and risks. Note that a messaging bot usually cannot drive another service's bot; that needs a separate user account the user creates for the agent.
+
+## Skill upgrades (weekly pass; update existing role skills AND find new ones)
+Each week pick ONE role (rotate; prefer the one with the most signals or a stalled row) and:
+1. Update: compare its skill with the week's signals and results; fix vague steps, add a missing proven method (well-known, evidence-based: e.g. progressive overload, GTD, sinking funds), drop steps nobody uses.
+2. Discover: search the skill/plugin catalogs available to the session (e.g. skill and plugin search tools) and the public web for a skill, plugin or method that fits the role. Free only by default; prefer read-only access; reject anything that needs passwords in repos.
+3. Propose as one app question "Скіл <роль>: <change> (чому: …) Так / Ні?" (counts toward the 2 proposals/week). On yes: edit the generic skill here (nothing personal) and/or the personal layer; installing an account skill or plugin is done by the user on an approval card.
+4. Log candidates (incl. rejected and paid ones) with date and reason in the private repo, so they are not re-checked every week.

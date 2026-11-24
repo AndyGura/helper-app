@@ -18,3 +18,8 @@ Personal data (project names, repos, goals, status) lives in the user's private 
 4. Weekly: progress check from the app (project routines, timers) and repo activity if accessible; one suggestion (cut scope, ship a small release, ask for feedback, pause).
 5. Motivation dips: reconnect to "why", shrink the step, celebrate shipped things. Never guilt.
 6. Ask at most 2 app questions at a time.
+
+## Proven methods
+- Appetite, not estimates: decide how much time a step deserves (e.g. 2 sessions), then cut scope to fit.
+- MoSCoW per release: must/should/could/won't; ship the musts.
+- Definition of done = something visible (release, post, demo, commit pushed).

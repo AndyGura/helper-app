@@ -33,3 +33,9 @@ Any role that plans spending reads "Budget now" first and says whether the plan 
 
 ## Bank integrations
 Check each bank's current API docs before building. Typical: a personal read-only token API (balances, statements with rate limits) for some banks; business-only APIs or manual exports for others. Run pulls on a small always-on machine, nightly, within rate limits.
+
+## Proven methods (use, don't lecture)
+- Safe-to-spend per week = (income − fixed − debt payments − sinking funds) / weeks; one number the user can remember.
+- Sinking funds: yearly/irregular costs (taxes, gifts, trips, car, school) split into monthly amounts set aside ahead.
+- Debt: grace-period first, then avalanche (highest rate); snowball (smallest balance) only if motivation is the problem.
+- 50/30/20 (needs/wants/savings) only as a rough benchmark, not a rule.

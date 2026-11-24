@@ -53,3 +53,7 @@ When the user has to deal with an office, utility, bank, registry or similar, th
 - Never ask for or store passwords. If the secretary needs to look inside an account, the user signs in themselves in a browser the secretary can use; record only where the account is (URL, account/contract number) in the private repo.
 - Prefer the provider's official correction/recalculation process over workarounds (e.g. under-reporting readings); mention the workaround's risk if the user suggests one.
 - After the user reports the result, record it in the private repo (home/admin file) so the next instruction for the same provider starts from known facts.
+
+## Proven methods
+- 4D triage per thread: delete/archive, delegate (to a role or person), do now if <2 min (draft only), defer (task with a date).
+- Batch: mail is processed in the scheduled runs only, so the user doesn't check it in between.

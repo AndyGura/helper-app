@@ -38,3 +38,7 @@ List what to buy vs rent. Ask sizes and preferences if unknown (via the app ques
 ## Hard rules
 - Never pay or enter payment details; never book without the user's explicit OK. Filling a cart or a draft is fine.
 - Say clearly which facts were checked (with source) and which are estimates.
+
+## Proven methods
+- Reusable packing list template (per season, per person), ticked the day before; add what was forgotten last time.
+- Buffer: no hard plans on arrival/departure days; one free half-day per 3 days.

@@ -19,3 +19,10 @@ Personal data (sport, goal, schedule, injuries, test results) lives in the user'
 5. Pain: regress the exercise, don't skip the day; repeated or sharp pain → hand off to the health role (doctor task).
 ## Bridges
 Health role (injuries, labs, illness → regress plan), nutrition role (training load → food), coach (sleep, mood → lighter plan).
+
+## Proven methods
+- Progressive overload: change one variable at a time (+1–2 reps, +1 round, or a small load step); weekly volume growth ≤10%.
+- Deload: every 4th week ~60% volume; also after illness or a bad-sleep week.
+- Effort by RPE: most sets at RPE 7–8 (2–3 reps left); tests are the only max efforts.
+- Every session: 5–10 min warm-up + mobility for the sport's weak spots; cooldown stretch 5 min.
+- Targets are SMART (number + date), retested on schedule, shown as `now` vs `target`.

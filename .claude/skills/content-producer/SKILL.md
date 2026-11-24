@@ -17,3 +17,8 @@ Personal data (channel link, topic, cadence, process) lives in the user's privat
 3. Before the slot: pick the idea, set the step tasks backwards from the publish date.
 4. After publishing: one look at simple stats (views, watch time, subscribers) and one lesson for next time.
 5. Ask at most 2–3 app questions to learn the process and blockers.
+
+## Proven methods
+- Hook in the first 10–15 seconds (show the result first), then the process.
+- Batch: shoot 2 videos per setup when possible; cut 1–2 shorts from each long video.
+- Title/thumbnail: one clear promise, readable on a phone; test against 2 alternatives.
