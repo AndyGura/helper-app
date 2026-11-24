@@ -164,7 +164,6 @@ views.home = () => {
       <p>${esc(qs[0].q)}</p><input type="hidden" name="id" value="${qs[0].id}">
       <textarea name="a" rows="3" placeholder="Скільки хочеш, своїми словами" required></textarea>
       <div class="row"><button class="primary">Відповісти</button><button type="button" data-act="qLater" data-v="${qs[0].id}">Пізніше</button></div></form>` : '')((data.questions || []).filter(q => !q.a && !qLater.includes(q.id)))}
-    ${(v => v ? `<button class="primary" data-act="tab" data-v="visits">🩺 Сказати лікарю: ${esc(v.title)}${v.date ? ' · ' + ddm(v.date) : ''}</button>` : '')(soonVisit())}
     <button class="big" data-act="next">Що мені робити?</button>
     ${c && c.kind === 'sleep' ? `<div class="card"><h2>${esc(c.title)}</h2></div>` : c ? `<div class="card"><h2>${esc(c.title)}</h2>
       ${c.minutes ? `<p class="muted">${c.minutes} хв</p>` : ''}${c.item && c.item.link ? `<p class="note">${linkify(c.item.link)}</p>` : ''}${planHint(c.item)}
@@ -176,7 +175,6 @@ views.home = () => {
       <select name="ref"><option value="">Своє (впиши нижче)</option>${data.routines.filter(timed).map(r => `<option value="${r.id}">${esc(r.title)}${r.goal ? ` (ціль ${hm(r.goal * 6e4)})` : ''}</option>`).join('')}</select>
       <input name="title" placeholder="Що робиш">
       <div class="row"><input name="minutes" type="number" min="1" placeholder="хв (порожньо = секундомір)"><button class="primary">Почати</button></div></form>
-    <button data-act="tab" data-v="visits">🩺 Сказати лікарю</button>
     <form data-form="memo" class="add quick"><h3>Запам'ятай</h3>
       <textarea name="text" rows="2" placeholder="Факт, ідея, що завгодно (напр. розмір шин 275/45 R20)" required></textarea>
       <button class="primary">Зберегти</button>
@@ -236,7 +234,7 @@ views.shop = () => {
 // ---------- Tasks & routines ----------
 // Tap on a task opens an action sheet (never marks done by accident); long text lives in a separate details view.
 let sheetTask = null, infoTask = null;
-const taskMeta = t => [t.due && ddm(t.due), t.monthly && `${t.months === 3 ? 'щокварталу' : t.months > 1 ? `кожні ${t.months} міс.` : 'щомісяця'} ${t.monthly}-го`, t.minutes && t.minutes + ' хв', (t.details || t.link || t.title.length > 80) && 'є подробиці'].filter(Boolean).join(' · ');
+const taskMeta = t => [t.due && ddm(t.due), t.monthly && `${t.months === 3 ? 'щокварталу' : t.months > 1 ? `кожні ${t.months} міс.` : 'щомісяця'} ${t.monthly}-го`, t.minutes && t.minutes + ' хв', (t.details || t.link || t.visitId || t.title.length > 80) && 'є подробиці'].filter(Boolean).join(' · ');
 function taskSheet() { const t = data.tasks.find(x => x.id === sheetTask); if (!t) { sheetTask = null; return ''; }
   return `<div class="sheetbg" data-act="sheetClose"><div class="sheetbox" data-act="noop"><p class="clamp"><b>${esc(t.title)}</b></p>${t.due ? `<p class="muted">до ${ddm(t.due)}</p>` : ''}
     ${t.done ? `<button class="primary" data-act="taskUndo" data-v="${t.id}">↩ Повернути в справи</button>` : `<button class="primary" data-act="taskDone" data-v="${t.id}">✓ Відмітити зробленим</button>`}
@@ -246,7 +244,7 @@ function taskSheet() { const t = data.tasks.find(x => x.id === sheetTask); if (!
 views.taskInfo = () => { const t = data.tasks.find(x => x.id === infoTask); if (!t) { tab = 'tasks'; return views.tasks(); }
   shell(`<div class="row cal-head"><button data-act="tab" data-v="tasks">‹</button><h1>Справа</h1></div>
     <p><b>${linkify(t.title)}</b></p><p class="muted">${[t.done ? 'зроблено' : '', taskMeta(t).replace(/ · є подробиці|є подробиці/, '')].filter(Boolean).join(' · ')}</p>
-    ${t.details ? `<p>${linkify(t.details)}</p>` : ''}${t.link ? `<p class="note">${linkify(t.link)}</p>` : ''}
+    ${t.details ? `<p>${linkify(t.details)}</p>` : ''}${t.visitId ? `<button data-act="tab" data-v="visits">🩺 Що сказати лікарю</button>` : ''}${t.link ? `<p class="note">${linkify(t.link)}</p>` : ''}
     ${t.done ? `<button data-act="taskUndo" data-v="${t.id}">↩ Повернути в справи</button>` : `<button class="primary" data-act="taskDone" data-v="${t.id}">✓ Відмітити зробленим</button>`}
     <button data-act="taskEdit" data-v="${t.id}">✎ Змінити</button>`); };
 
@@ -371,7 +369,6 @@ function planPrint(p) {
 // ---------- "Tell the doctor": per upcoming visit, what to say / ask / bring; tick off at the appointment ----------
 const VK = { say: 'Сказати', ask: 'Спитати', bring: 'Взяти з собою' };
 const openVisits = () => (data.visits || []).filter(v => !v.done).sort((a, b) => (a.date || '9') < (b.date || '9') ? -1 : 1);
-function soonVisit() { const t = Logic.localDay(); return openVisits().find(v => v.date && v.date >= t && Math.round((Date.parse(v.date) - Date.parse(t)) / 864e5) <= 3); }
 views.visits = () => {
   const vs = openVisits();
   const one = v => { const it = v.items || [], left = it.filter(i => !i.done).length;
@@ -382,7 +379,7 @@ views.visits = () => {
     <form data-form="visitResult" class="add"><input type="hidden" name="id" value="${v.id}"><textarea name="result" rows="3" placeholder="Що сказав лікар: діагноз, призначення, аналізи">${esc(v.result || '')}</textarea>
       <div class="row"><button>Зберегти відповідь</button><button type="button" data-act="visitPrint" data-v="${v.id}">📄 PDF</button></div>
       <button type="button" data-act="visitDone" data-v="${v.id}">Візит завершено${left ? ` (не відмічено ${left})` : ''}</button></form>`; };
-  shell(`<div class="row cal-head"><button data-act="tab" data-v="home">‹</button><h1>Сказати лікарю</h1></div>
+  shell(`<div class="row cal-head"><button data-act="tab" data-v="${infoTask ? 'taskInfo' : 'tasks'}">‹</button><h1>Сказати лікарю</h1></div>
     ${vs.map(one).join('') || '<p class="muted">Немає запланованих візитів.</p>'}
     <details ${vs.length ? '' : 'open'}><summary>+ Новий візит</summary><form data-form="visitNew" class="add"><input name="title" placeholder="До кого (напр. терапевт)" required><input name="date" type="date"><button class="primary">Додати</button></form></details>`);
 };
