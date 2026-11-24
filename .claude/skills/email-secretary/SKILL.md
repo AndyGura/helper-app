@@ -34,3 +34,10 @@ Personal settings (mailboxes, labels per source, sender decisions, who counts as
 3. On "no": unsubscribe via the List-Unsubscribe link/header; if impossible, create a filter `from:<sender>` -> skip inbox, mark read (trash only if the user agreed). Record the decision in the private repo.
 4. Lab results emails: hand off to the lab-results-review skill; first check whose results they are (may be a family member's) and file to that person's record.
 5. Limits: no instant push; alerts reach the user only after the next run (plus the push queue delay).
+
+## Gifts and occasions (also the secretary's job)
+The secretary watches the calendar of occasions itself; the user should never have to remember them.
+- Keep an occasions list in the private repo (family birthdays, holidays the family celebrates, anniversaries) with each person's gift profile and past gifts (avoid repeats).
+- Lead time 3–4 weeks: at each review, for every occasion within 28 days without a plan, propose 2–3 ideas per person (from their profile/wishes), each with a price, checked against the finance role's current budget (say if it doesn't fit; offer a cheaper option).
+- After the user picks: an order task (buy-by date = delivery time + buffer before the occasion), then on order a pickup task with the pickup point and date; record the gift in the person's past gifts.
+- Surprise gifts are private: mark them private so they never show in exports/printouts, and keep push texts neutral.
