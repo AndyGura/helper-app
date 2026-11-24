@@ -41,3 +41,6 @@ The secretary watches the calendar of occasions itself; the user should never ha
 - Lead time 3–4 weeks: at each review, for every occasion within 28 days without a plan, propose 2–3 ideas per person (from their profile/wishes), each with a price, checked against the finance role's current budget (say if it doesn't fit; offer a cheaper option).
 - After the user picks: an order task (buy-by date = delivery time + buffer before the occasion), then on order a pickup task with the pickup point and date; record the gift in the person's past gifts.
 - Surprise gifts are private: mark them private so they never show in exports/printouts, and keep push texts neutral.
+
+## Home and car (also the secretary's job)
+Recurring home admin (meter readings, rent/utility payments, repairs, supplies) and car care (seasonal tire swap, service/inspection, insurance, washes) live in the private repo's home/car files. Keep each as a recurring app task with a lead time; propose the next one before it is due.

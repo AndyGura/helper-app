@@ -27,6 +27,15 @@ const Agents = (() => {
     { id: 'r_nutrition', skill: 'nutritionist', emoji: '🥗',
       name: { uk: 'Нутриціолог', en: 'Nutritionist' },
       about: { uk: 'Просте харчування під ціль, тренування й бюджет', en: 'Simple eating that fits goals, training and budget' } },
+    { id: 'r_po', skill: 'product-owner', emoji: '🛠️',
+      name: { uk: 'Продакт-оунер', en: 'Product owner' },
+      about: { uk: 'Твої проєкти: фокус, маленькі наступні кроки, рух без перевантаження', en: 'Your side projects: focus, small next steps, steady progress' } },
+    { id: 'r_stylist', skill: 'stylist', emoji: '👔',
+      name: { uk: 'Стиліст', en: 'Stylist' },
+      about: { uk: 'Стиль, розміри, капсульний гардероб у межах бюджету', en: 'Style, sizes, capsule wardrobe within budget' } },
+    { id: 'r_producer', skill: 'content-producer', emoji: '🎬',
+      name: { uk: 'Продюсер каналу', en: 'Channel producer' },
+      about: { uk: 'Канал: посильний ритм, ідеї, кроки до публікації', en: 'Your channel: sustainable cadence, ideas, steps to publish' } },
   ];
   const UI = {
     uk: { title: 'Обери свою команду', intro: 'Кожен агент — окрема роль помічника. Менеджер увімкнений завжди. Змінити можна в налаштуваннях.',
