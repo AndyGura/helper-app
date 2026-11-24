@@ -67,3 +67,5 @@ button:active:not(:disabled),.btn:active{filter:brightness(.8);transform:scale(.
 .pick{display:flex;align-items:center;gap:12px;margin:0;width:100%}.pick input{width:auto;margin:0}
 .moodchart i.g{background:none;border:2px solid #6aa9ff;border-bottom:none}
 .moodchart i.m.g{background:none;border:2px solid var(--acc);border-bottom:none}
+.rdet summary { color: var(--acc); font-size: .9em; cursor: pointer; }
+.rdet p { margin: .3em 0 0; font-size: .9em; }
