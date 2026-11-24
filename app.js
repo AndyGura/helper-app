@@ -475,7 +475,9 @@ views.chat = () => {
 // ---------- Settings: backup / import ----------
 // VAPID key: typed on this device, else the one synced with the last subscription (so a new phone needs no Pi access).
 const PUSH_EP = 'pushEndpoint', vapidKey = () => (data.settings?.vapid || data.push?.vapid || '').trim();
-views.settings = () => { const s = data.settings || {}; shell(`<h1>Налаштування</h1>
+// Read-only "team": the assistant's roles (maintained by the agents in the data repo): emoji, name, purpose, next step.
+const teamHtml = () => (rs => rs.length ? `<h3>Команда помічника</h3><ul class="list">${rs.map(r => `<li class="${r.status === 'paused' ? 'done' : ''}"><span>${esc(r.emoji || '•')}</span><div><b>${esc(r.name)}</b><small>${esc(r.about || '')}</small>${r.next ? `<small>Далі: ${esc(r.next)}${r.date ? ' · ' + ddm(r.date) : ''}</small>` : ''}</div></li>`).join('')}</ul>` : '')((data.roles || []).filter(r => r.status !== 'retired'));
+views.settings = () => { const s = data.settings || {}; shell(`${teamHtml()}<h1>Налаштування</h1>
   <button data-act="lock">Заблокувати</button>
   ${localStorage.getItem(CRED) ? '<button data-act="faceOff">Вимкнути Face ID</button>' : '<button data-act="faceEnable">Увімкнути Face ID</button>'}
   <h3>Репозиторій з даними</h3>
