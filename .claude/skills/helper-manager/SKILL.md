@@ -15,6 +15,11 @@ Goal: the user should not have to invent process rules. The manager notices what
 - App data: unanswered questions piling up, memos/tasks nobody acted on, inbox notes the user dismissed unread (if tracked), overdue tasks created by a role.
 - Git log of the data repo (last 7 days): which roles actually produced output.
 
+## Team audit (weekly pass)
+- Orphaned work: compare the private repo's areas (owner files, domains, app plans/tasks/routines) with the roles registry. Work with no owner role → propose "hire" a new role (or assign it to an existing one) as a Yes/No app item; on yes, run the ROLES.md creation checklist.
+- Idle or overlapping roles: no visible step for 2+ weeks, or two roles doing the same job (incl. old one-off scheduled tasks) → propose pause, merge or retire.
+- These count toward the 2 proposals per week.
+
 ## Daily step (inside the evening review, ≤ a few lines of work)
 Scan the signals above for today. Append findings to the signals log as `date | signal | likely cause`. No app output unless something is broken now (then one app line).
 
