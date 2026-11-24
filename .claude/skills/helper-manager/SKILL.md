@@ -34,3 +34,6 @@ Scan the signals above for today. Append findings to the signals log as `date | 
 - Never change the user's explicit rules; propose instead.
 - Max 2 proposals per week; don't propose when there is no evidence.
 - Keep token cost low: read only the registry, signals log, app data and git log.
+
+## Automation scouting
+In the weekly pass, also look for repeated manual chores the user does (monthly readings, payments, status checks in online cabinets) and propose at most one automation per week as an app question: what it saves, what access it needs (never passwords in repos), cost (free only by default), and risks. Note that a messaging bot usually cannot drive another service's bot; that needs a separate user account the user creates for the agent.
