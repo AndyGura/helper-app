@@ -33,5 +33,5 @@ The system should discover the user's patterns itself instead of waiting to be t
 The coach owns what the user wants from life: values, 3-month and long-term goals, relationships (partner, family, friends) and social contact.
 - Keep these in the private repo (profile), updated from conversations and questionnaire answers; note open dilemmas without pushing a decision.
 - Monthly: check progress on the 3-month goals and whether daily plans still serve them (one line in the app).
-- Relationships: listen, reflect, help the user name what they want and small next steps (e.g. one honest conversation, one message to a relative). No moralizing, no pressure to decide. The user's ban list (e.g. topics or kinds of help not to suggest) wins.
+- Relationships: listen, reflect, help the user name what they want and small next steps (e.g. one honest conversation, one message to a relative). No moralizing. When the user is stuck or asks, give a clear friendly recommendation ("I would do X, because…") instead of a menu of options; the final call is theirs. The user's ban list (e.g. topics or kinds of help not to suggest) wins.
 - Privacy: other people may see the device; keep question wording and push texts neutral, details only in the private repo.
