@@ -24,9 +24,9 @@ const Agents = (() => {
   ];
   const UI = {
     uk: { title: 'Обери свою команду', intro: 'Кожен агент — окрема роль помічника. Менеджер увімкнений завжди. Змінити можна в налаштуваннях.',
-      always: 'завжди', done: 'Готово', change: 'Змінити агентів', start: 'перший крок — короткі питання в аппці', have: 'Вже маю дані → Налаштування' },
+      always: 'завжди', done: 'Готово', change: 'Змінити команду', start: 'перший крок — короткі питання в аппці', have: 'Вже маю дані → Налаштування' },
     en: { title: 'Pick your team', intro: 'Each agent is a separate helper role. The manager is always on. You can change this in settings.',
-      always: 'always on', done: 'Done', change: 'Change agents', start: 'first step: a few short questions in the app', have: 'I already have data → Settings' },
+      always: 'always on', done: 'Done', change: 'Change team', start: 'first step: a few short questions in the app', have: 'I already have data → Settings' },
   };
   const tr = (o, lang) => o[lang] || o.uk || o.en;
   const ui = lang => UI[lang] || UI.uk;
@@ -44,6 +44,7 @@ const Agents = (() => {
     }
     return data;
   }
-  return { CATALOG, UI, tr, ui, chosen, apply };
+  const active = data => (data.roles || []).filter(r => r.status !== 'retired').map(r => r.id).sort();
+  return { CATALOG, UI, tr, ui, chosen, apply, active };
 })();
 if (typeof module !== 'undefined') module.exports = Agents;

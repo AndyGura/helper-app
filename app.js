@@ -476,13 +476,14 @@ views.chat = () => {
 // VAPID key: typed on this device, else the one synced with the last subscription (so a new phone needs no Pi access).
 const PUSH_EP = 'pushEndpoint', vapidKey = () => (data.settings?.vapid || data.push?.vapid || '').trim();
 // Read-only "team": the assistant's roles (maintained by the agents in the data repo): emoji, name, purpose, next step.
-const teamHtml = () => (rs => rs.length ? `<details><summary>Команда помічника (${rs.length})</summary><ul class="list">${rs.map(r => `<li class="${r.status === 'paused' ? 'done' : ''}"><span>${esc(r.emoji || '•')}</span><div><b>${esc(r.name)}</b><small>${esc(r.about || '')}</small>${r.next ? `<small>Далі: ${esc(r.next)}${r.date ? ' · ' + ddm(r.date) : ''}</small>` : ''}</div></li>`).join('')}</ul></details>` : '')((data.roles || []).filter(r => r.status !== 'retired'));
+const teamHtml = () => (rs => rs.length ? `<details><summary>Команда помічника (${rs.length})</summary><ul class="list">${rs.map(r => `<li class="${r.status === 'paused' ? 'done' : ''}"><span>${esc(r.emoji || '•')}</span><div><b>${esc(r.name)}</b><small>${esc(r.about || '')}</small>${r.next ? `<small>Далі: ${esc(r.next)}${r.date ? ' · ' + ddm(r.date) : ''}</small>` : ''}</div></li>`).join('')}</ul><button data-act="tab" data-v="agents">${esc(Agents.ui(data.settings?.lang || 'uk').change)}</button></details>` : '')((data.roles || []).filter(r => r.status !== 'retired'));
 // Onboarding: pick which agents (roles) to enable. Shown until the manager role exists; reopened from settings.
-views.agents = () => { const L = data.settings?.lang || 'uk', T = Agents.ui(L), act = new Set((data.roles || []).filter(r => r.status !== 'retired').map(r => r.id));
+let agentsShown = '';
+views.agents = () => { const L = data.settings?.lang || 'uk', T = Agents.ui(L), act = new Set(Agents.active(data)); agentsShown = JSON.stringify(Agents.active(data));
   $app.innerHTML = `<div class="page"><h1>${esc(T.title)}</h1><p class="muted">${esc(T.intro)}</p><ul class="list">${Agents.CATALOG.map(a =>
     `<li><label class="pick"><input type="checkbox" name="agent" value="${a.id}" ${a.required ? 'checked disabled' : act.has(a.id) ? 'checked' : ''}><span>${a.emoji}</span><div><b>${esc(Agents.tr(a.name, L))}</b>${a.required ? ` <small>· ${esc(T.always)}</small>` : ''}<small>${esc(Agents.tr(a.about, L))}</small></div></label></li>`).join('')}</ul>
     <button class="primary" data-act="agentsDone">${esc(T.done)}</button>${Agents.chosen(data) ? '' : `<button data-act="tab" data-v="settings">${esc(T.have)}</button>`}</div>`; };
-views.settings = () => { const s = data.settings || {}; shell(`${teamHtml()}<button data-act="tab" data-v="agents">${esc(Agents.ui(s.lang || 'uk').change)}</button><h1>Налаштування</h1>
+views.settings = () => { const s = data.settings || {}; shell(`${teamHtml()}<h1>Налаштування</h1>
   <button data-act="lock">Заблокувати</button>
   ${localStorage.getItem(CRED) ? '<button data-act="faceOff">Вимкнути Face ID</button>' : '<button data-act="faceEnable">Увімкнути Face ID</button>'}
   <h3>Репозиторій з даними</h3>
@@ -508,6 +509,7 @@ const acts = {
   agentsDone: async () => { const ids = [...$app.querySelectorAll('input[name=agent]:checked')].map(i => i.value);
     const had = Agents.chosen(data); if (data.settings?.ghRepo) await syncNow(); // never overwrite roles the data repo already has
     if (!had && Agents.chosen(data)) { tab = 'settings'; return render(); } // server already had roles/data: keep them, show the team list
+    if (JSON.stringify(Agents.active(data)) !== agentsShown) { tab = 'agents'; return render(); } // roles changed during sync: show the fresh state, apply nothing
     Agents.apply(data, ids, data.settings?.lang || 'uk'); tab = 'home'; await save(); render(); },
   key: v => { const el = document.getElementById('pin'); el.value = v === 'back' ? el.value.slice(0, -1) : (el.value + v).slice(0, 6); },
   bonus: () => { skipped = []; next(true); }, // declined items come back in bonus mode
