@@ -316,7 +316,7 @@ views.plan = (rid = null) => {
   const bud = F(data.budgets, 'budgets').map(b => `<h3>${esc(b.title)}</h3>${b.note ? `<p class="muted">${linkify(b.note)}</p>` : ''}${(b.months || []).map(m => { const tot = (m.rows || []).reduce((a, r) => a + (+r.v || 0), 0);
     return `<details${m.open ? ' open' : ''}><summary><b>${esc(m.name)}</b>: <span style="color:var(${tot < 0 ? '--bad' : '--acc'})">${fm(tot)} ${esc(b.cur || '')}</span></summary><ul class="list">${(m.rows || []).map(r => `<li><div><b>${esc(r.t)}</b>${r.note ? `<small>${linkify(r.note)}</small>` : ''}</div><span style="${r.v < 0 ? 'color:var(--bad)' : ''}">${r.v == null ? '?' : fm(r.v)}</span></li>`).join('')}</ul>${m.note ? `<p class="muted">${linkify(m.note)}</p>` : ''}</details>`; }).join('')}`).join('');
   shell(`${rid ? roleHead(rid) : ''}${bud ? `<h1>Бюджет</h1>${bud}` : ''}${tr.length || old.length ? `<h1>Подорожі</h1><ul class="list">${tr.map(tripLi).join('')}</ul>${old.length ? `<details><summary>Минулі (${old.length})</summary><ul class="list">${old.map(tripLi).join('')}</ul></details>` : ''}` : ''}
-    ${ps.length || !rid ? '<h1>Цілі</h1>' : ''}${ps.map(p => { const n = Logic.planNow(p, today), st = p.stages || [], ts = p.targets || [];
+    ${ps.length || !rid ? '<h1>Цілі</h1>' : ''}${!rid && data.prefs && data.prefs.vision ? `<p class="muted">✨ ${esc(data.prefs.vision)}</p>` : ''}${ps.map(p => { const n = Logic.planNow(p, today), st = p.stages || [], ts = p.targets || [];
     const pct = t => t.now == null ? 0 : Math.min(1, t.now / t.goal);
     const avg = ts.length ? Math.round(100 * ts.reduce((a, t) => a + pct(t), 0) / ts.length) : 0;
     return `<h3>${esc(p.title)}</h3>${p.note ? `<p class="muted">${esc(p.note)}</p>` : ''}
