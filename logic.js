@@ -190,7 +190,12 @@ const Logic = (() => {
     const out = { ...local, deleted: { ...(remote.deleted || {}) } };
     for (const [id, t] of Object.entries(local.deleted || {})) out.deleted[id] = Math.max(t, out.deleted[id] || 0);
     for (const [id, t] of Object.entries(out.deleted)) if (now - t > 60 * 864e5) delete out.deleted[id];
-    for (const c of COLLECTIONS) {
+    // Unknown keys survive (an older app version must not drop data added by agents or a newer version):
+    // any array of {id} objects is merged like a collection, other remote-only keys are kept as they are.
+    const isColl = v => Array.isArray(v) && v.length && v.every(x => x && typeof x === 'object' && 'id' in x);
+    const extra = [...new Set([...Object.keys(remote), ...Object.keys(local)])].filter(k => !COLLECTIONS.includes(k) && (isColl(remote[k]) || isColl(local[k])));
+    for (const k of Object.keys(remote)) if (!(k in out) && !extra.includes(k)) out[k] = remote[k];
+    for (const c of [...COLLECTIONS, ...extra]) {
       const m = new Map();
       for (const it of [...(remote[c] || []), ...(local[c] || [])]) {
         const prev = m.get(it.id);
