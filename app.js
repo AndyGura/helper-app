@@ -654,8 +654,12 @@ const acts = {
 $app.addEventListener('click', e => {
   if (e.target.closest('a[href]')) return; // links open, never toggle the row
   const el = e.target.closest('[data-act]'); if (!el) return;
+  if (el.dataset.act === 'key') return; // PIN keys fire on pointerdown (below)
   e.stopPropagation(); acts[el.dataset.act]?.(el.dataset.v);
 });
+// PIN keypad: react on touch-down, not click, so fast taps are never merged into a double-tap or dropped.
+$app.addEventListener('pointerdown', e => { const el = e.target.closest('[data-act=key]'); if (!el) return;
+  e.preventDefault(); acts.key(el.dataset.v); el.classList.add('hit'); setTimeout(() => el.classList.remove('hit'), 120); });
 $app.addEventListener('keydown', e => { if (e.key === 'Enter' && e.target.id?.startsWith('pin')) unlock(); });
 const num = v => v === '' ? undefined : +v;
 function routineFrom(f, old) {

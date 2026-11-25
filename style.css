@@ -69,3 +69,4 @@ button:active:not(:disabled),.btn:active{filter:brightness(.8);transform:scale(.
 .moodchart i.m.g{background:none;border:2px solid var(--acc);border-bottom:none}
 .rdet summary { color: var(--acc); font-size: .9em; cursor: pointer; }
 .rdet p { margin: .3em 0 0; font-size: .9em; }
+.pad button{touch-action:manipulation;user-select:none;-webkit-user-select:none;transition:none}.pad button.hit{filter:brightness(.75)}
