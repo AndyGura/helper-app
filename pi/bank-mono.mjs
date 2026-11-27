@@ -63,7 +63,7 @@ if (!test) {
           const v = uah(t.amount), c = cat(t);
           if (v >= 0) { m.in += v; continue; }
           m.out -= v; m.cats[c] = (m.cats[c] || 0) - v; m.byAcc[a.last4 || a.type] = (m.byAcc[a.last4 || a.type] || 0) - v;
-          const d = (t.description || '?').replace(/\s+/g, ' ').trim().slice(0, 40); m.top[d] = (m.top[d] || 0) - v;
+          const d = ((t.description || '?') + (t.counterName ? ' → ' + t.counterName : '')).replace(/\s+/g, ' ').trim().slice(0, 60); m.top[d] = (m.top[d] || 0) - v;
         }
         console.log(key, a.type, tx.length, 'tx');
         if (tx.length < 500) break;
