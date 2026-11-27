@@ -77,7 +77,7 @@ if (!test) {
 }
 
 const out = { source: 'monobank', updated: new Date().toISOString(), note: 'UAH, whole hryvnias. out/cats/top = spending; in = all incoming (salary, refunds, own transfers).',
-  accounts: accs.map(({ id, ...a }) => a), months };
+  accounts: accs.map(({ id, ...a }) => a), jars: (info.jars || []).map(j => ({ title: j.title, cur: CUR[j.currencyCode] || String(j.currencyCode), balance: uah(j.balance), goal: j.goal ? uah(j.goal) : null })), months };
 const w = await gh('PUT', { message: 'Bank sync (aggregates)', content: Buffer.from(JSON.stringify(out, null, 1)).toString('base64'), sha });
 if (!w.ok) throw new Error(`GitHub write ${w.status}: token needs Contents "Read and write" on the data repo`);
 console.log(new Date().toISOString(), test ? 'TEST OK:' : 'sync OK:', accs.length, 'accounts', test ? '' : Object.keys(months).length + ' months', '→', PATH);
