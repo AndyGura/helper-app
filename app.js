@@ -339,7 +339,7 @@ views.plan = (rid = null) => {
 // An item belongs to a role if it has `role: <id>`, else if the role owns its whole collection (Agents.owner).
 const mine = (x, coll, rid) => x.role ? x.role === rid : Agents.owner(coll) === rid;
 let roleId = null;
-const activeRoles = () => (data.roles || []).filter(r => r.status === 'active' || r.status === 'paused');
+const activeRoles = () => (data.roles || []).filter(r => r.status !== 'retired'); // any status but retired (guards against free text in status)
 views.menu = () => shell(`<h1>Меню</h1><ul class="list">${activeRoles().map(r => `<li data-act="role" data-v="${r.id}"><span>${esc(r.emoji || '•')}</span><div><b>${esc(r.name)}</b><small>${esc(r.about || '')}</small></div><span>›</span></li>`).join('')}</ul>
   <ul class="list"><li data-act="tab" data-v="plan"><span>🎯</span><div><b>Усі цілі, бюджети й поїздки</b></div><span>›</span></li>
   <li data-act="tab" data-v="settings"><span>⚙️</span><div><b>Налаштування</b></div><span>›</span></li></ul>`);
@@ -350,7 +350,7 @@ function roleHead(rid) {
   const habits = (data.routines || []).filter(h => h.role === rid), ds = Logic.doneSet(data, ld);
   const vis = F2(data.visits, 'visits', rid).filter(v => !v.done);
   return `<div class="row cal-head"><button data-act="tab" data-v="menu">‹</button><h1>${esc(r.emoji || '')} ${esc(r.name)}</h1></div>
-    ${r.about ? `<p class="muted">${esc(r.about)}</p>` : ''}${r.next ? `<p>Далі: ${esc(r.next)}${r.date ? ' · ' + ddm(r.date) : ''}</p>` : ''}
+    ${r.about ? `<p class="muted">${esc(r.about)}</p>` : ''}${r.last ? `<p class="muted">Останнє: ${esc(r.last)}</p>` : ''}${r.next ? `<p>Далі: ${esc(r.next)}${r.date ? ' · ' + ddm(r.date) : ''}</p>` : ''}
     ${(r.summary || []).length ? `<h3>Що вже є</h3><ul class="hint">${r.summary.map(x => `<li>${linkify(x)}</li>`).join('')}</ul>` : ''}
     ${notes.map(n => `<div class="note"><p>${linkify(n.text)}</p></div>`).join('')}
     ${tasks.length ? `<h3>Справи</h3><ul class="list">${tasks.map(t => `<li class="${t.done ? 'done' : ''}" data-act="taskMenu" data-v="${t.id}"><span class="box"></span><div><b class="clamp">${esc(t.title)}</b><small>${taskMeta(t)}</small></div></li>`).join('')}</ul>` : ''}
