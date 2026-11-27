@@ -1,10 +1,11 @@
 // Nightly bank sync for monobank (personal read-only API). Zero AI tokens. Cannot move money: the API is read-only.
-// Writes ONLY aggregates (balances, credit limits, monthly totals by category, top merchants) to the private data repo.
-// Raw transactions and account ids are never stored. The monobank token lives only in the env file on this machine.
+// Writes aggregates (balances, credit limits, monthly totals by category, top merchants) to the private data repo.
+// Raw transactions only with BANK_RAW=1 (the user's choice). Account ids are never stored. The monobank token lives only in the env file on this machine.
 // Env: MONO_TOKEN, GH_TOKEN (fine-grained, Contents: Read and write on the data repo), GH_REPO (owner/repo),
-//      BANK_PATH (default data/bank.json), BANK_MONTHS (months to (re)fetch, default 3 incl. current).
+//      BANK_PATH (default data/bank.json), BANK_MONTHS (months to (re)fetch, default 3 incl. current),
+//      BANK_RAW=1 (opt-in: also store every transaction, minus bank ids, in <dir of BANK_PATH>/bank-tx/YYYY-MM.json).
 // Run: node bank-mono.mjs test  (accounts only, writes the file: checks both tokens)  |  node bank-mono.mjs  (full sync)
-const E = process.env, PATH = E.BANK_PATH || 'data/bank.json', MONTHS = +E.BANK_MONTHS || 3, test = process.argv[2] === 'test';
+const E = process.env, RAW = E.BANK_RAW === '1', raw = {}, PATH = E.BANK_PATH || 'data/bank.json', MONTHS = +E.BANK_MONTHS || 3, test = process.argv[2] === 'test';
 if (!E.MONO_TOKEN) throw new Error('MONO_TOKEN missing in the env file');
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const CUR = { 980: 'UAH', 840: 'USD', 978: 'EUR', 985: 'PLN', 826: 'GBP' };
@@ -19,7 +20,7 @@ async function mono(path) {
   }
   throw new Error('monobank: rate limited');
 }
-const gh = (method, body) => fetch(`https://api.github.com/repos/${E.GH_REPO}/contents/${PATH}`, {
+const gh = (method, body, path = PATH) => fetch(`https://api.github.com/repos/${E.GH_REPO}/contents/${path}`, {
   method, headers: { Authorization: `Bearer ${E.GH_TOKEN}`, Accept: 'application/vnd.github+json' }, body: body && JSON.stringify(body) });
 
 // MCC → category (coarse; the coach refines with the top merchants list).
@@ -64,6 +65,7 @@ if (!test) {
         end = Math.min(...tx.map(t => t.time)) - 1;
       }
       all.sort((x, y) => x.time - y.time);
+      if (RAW) (raw[key] = raw[key] || []).push(...all.map(({ id, ...t }) => ({ acc: a.last4 || a.type, ...t })));
       let follow = null; // jar withdrawal → the payments right after it (≤3 h, up to the withdrawn sum) are attributed to that jar
       for (const t of all) {
         const v = uah(t.amount), c = cat(t), d = ((t.description || '?') + (t.counterName ? ' → ' + t.counterName : '')).replace(/\s+/g, ' ').trim().slice(0, 60);
@@ -93,3 +95,9 @@ const out = { source: 'monobank', updated: new Date().toISOString(), note: 'UAH,
 const w = await gh('PUT', { message: 'Bank sync (aggregates)', content: Buffer.from(JSON.stringify(out, null, 1)).toString('base64'), sha });
 if (!w.ok) throw new Error(`GitHub write ${w.status}: token needs Contents "Read and write" on the data repo`);
 console.log(new Date().toISOString(), test ? 'TEST OK:' : 'sync OK:', accs.length, 'accounts', test ? '' : Object.keys(months).length + ' months', '→', PATH);
+
+for (const [k, list] of Object.entries(raw)) { // one file per month, overwritten on each run
+  const p = PATH.replace(/[^/]*$/, '') + `bank-tx/${k}.json`, o = await gh('GET', null, p), sha2 = o.ok ? (await o.json()).sha : undefined;
+  const r2 = await gh('PUT', { message: 'Bank sync (transactions)', content: Buffer.from(JSON.stringify(list.sort((x, y) => x.time - y.time))).toString('base64'), sha: sha2 }, p);
+  console.log(k, list.length, 'tx', r2.ok ? 'saved' : 'GitHub write ' + r2.status);
+}

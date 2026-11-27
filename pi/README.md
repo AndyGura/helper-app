@@ -64,7 +64,7 @@ The phone should show "Тест: нагадування працюють ✓". D
 
 ## Optional: nightly bank sync (monobank)
 
-Read-only: the monobank personal API cannot move money. Only aggregates go to the data repo (`data/bank.json`: balances, credit limits, monthly spending by category, top merchants); no raw transactions, no account ids. The monobank token stays only in `~/.helper-push.env` on the Pi.
+Read-only: the monobank personal API cannot move money. By default only aggregates go to the data repo (`data/bank.json`: balances, credit limits, monthly spending by category, top merchants); full transactions only if you opt in (below); never account ids. The monobank token stays only in `~/.helper-push.env` on the Pi.
 
 1. **Laptop, GitHub (1 min):** https://github.com/settings/personal-access-tokens → open the Pi token → Edit → Repository permissions → **Contents: Read and write** → Update. (The Pi now writes one file.)
 2. **Pi (ssh):**
@@ -73,6 +73,7 @@ cd ~/helper-app && git pull && cd pi && bash bank-setup.sh
 ```
 Paste the monobank token when asked (hidden). You should see `TEST OK: N accounts`. A first full sync then runs in the background (~5–10 min, the API allows 1 request per minute); later it runs nightly at 03:17.
 - Check: `tail ~/.helper-bank.log` → `sync OK`.
+- Optional, full transactions too (one file per month in `data/bank-tx/`, private repo only): `echo BANK_RAW=1 >> ~/.helper-push.env`.
 - New monobank token: run `bash bank-setup.sh` again. Stop: `crontab -e`, delete the `bank-mono.mjs` line.
 - `GitHub write 403`: step 1 not done. `monobank 403`: token wrong or revoked.
 
