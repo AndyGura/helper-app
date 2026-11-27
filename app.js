@@ -251,7 +251,13 @@ views.shop = () => {
 // Tap on a task opens an action sheet (never marks done by accident); long text lives in a separate details view.
 let sheetTask = null, infoTask = null;
 const taskMeta = t => [t.due && ddm(t.due), t.monthly && `${t.months === 3 ? 'щокварталу' : t.months > 1 ? `кожні ${t.months} міс.` : 'щомісяця'} ${t.monthly}-го`, t.minutes && t.minutes + ' хв', (t.details || t.link || t.visitId || t.title.length > 80) && 'є подробиці'].filter(Boolean).join(' · ');
+// Tasks that ask to find something out: «Готово» asks for the answer (saved as t.answer for the agents' review).
+const needsAnswer = t => t.ask || /^\s*(уточнити|дізнатися|дізнатись|з[’'ʼ]ясувати|спитати|запитати|перевірити,? чи)/i.test(t.title);
+let answerTask = null;
 function taskSheet() { const t = data.tasks.find(x => x.id === sheetTask); if (!t) { sheetTask = null; return ''; }
+  if (answerTask === t.id) return `<div class="sheetbg" data-act="sheetClose"><div class="sheetbox" data-act="noop"><p class="clamp"><b>${esc(t.title)}</b></p>
+    <form data-form="taskAnswer"><input type="hidden" name="id" value="${t.id}"><textarea name="answer" rows="4" placeholder="Що дізнався? Помічник прочитає і зробить наступний крок" required>${esc(t.answer || '')}</textarea>
+    <button class="primary">✓ Готово</button></form><button data-act="sheetClose">Скасувати</button></div></div>`;
   return `<div class="sheetbg" data-act="sheetClose"><div class="sheetbox" data-act="noop"><p class="clamp"><b>${esc(t.title)}</b></p>${t.due ? `<p class="muted">до ${ddm(t.due)}</p>` : ''}
     ${t.done ? `<button class="primary" data-act="taskUndo" data-v="${t.id}">↩ Повернути в справи</button>` : `<button class="primary" data-act="taskDone" data-v="${t.id}">✓ Відмітити зробленим</button>`}
     <button data-act="taskInfo" data-v="${t.id}">Подробиці</button>
@@ -260,7 +266,7 @@ function taskSheet() { const t = data.tasks.find(x => x.id === sheetTask); if (!
 views.taskInfo = () => { const t = data.tasks.find(x => x.id === infoTask); if (!t) { tab = 'tasks'; return views.tasks(); }
   shell(`<div class="row cal-head"><button data-act="tab" data-v="tasks">‹</button><h1>Справа</h1></div>
     <p><b>${linkify(t.title)}</b></p><p class="muted">${[t.done ? 'зроблено' : '', taskMeta(t).replace(/ · є подробиці|є подробиці/, '')].filter(Boolean).join(' · ')}</p>
-    ${t.details ? `<p>${linkify(t.details)}</p>` : ''}${t.visitId ? `<button data-act="tab" data-v="visits">🩺 Що сказати лікарю</button>` : ''}${t.link ? `<p class="note">${linkify(t.link)}</p>` : ''}
+    ${t.details ? `<p>${linkify(t.details)}</p>` : ''}${t.answer ? `<div class="note"><p><b>Твоя відповідь:</b> ${linkify(t.answer)}</p></div>` : ''}${t.visitId ? `<button data-act="tab" data-v="visits">🩺 Що сказати лікарю</button>` : ''}${t.link ? `<p class="note">${linkify(t.link)}</p>` : ''}
     ${t.done ? `<button data-act="taskUndo" data-v="${t.id}">↩ Повернути в справи</button>` : `<button class="primary" data-act="taskDone" data-v="${t.id}">✓ Відмітити зробленим</button>`}
     <button data-act="taskEdit" data-v="${t.id}">✎ Змінити</button>`); };
 
@@ -600,7 +606,7 @@ const acts = {
   monthToggle: () => { showMonth = !showMonth; render(); },
   tab: v => { tab = v; render(); },
   other: () => { skipped.push(current.id); next(); },
-  done: async () => { Logic.markDone(data, current); current = null; await save(); next(); },
+  done: async () => { if (current.kind === 'task' && needsAnswer(current.item)) return acts.taskDone(current.id); Logic.markDone(data, current); current = null; await save(); next(); },
   start: () => { const c = current; startTimer(c.title, c.minutes, c.kind, c.id); },
   timerDone: v => { clearInterval(tick); finishTimer(v); },
   timerStop: async v => { data.timers = timers().filter(x => x.id !== v); await save(); render(); },
@@ -625,8 +631,9 @@ const acts = {
   toggleShop: async v => { const i = data.shopping.find(x => x.id === v); i.done = !i.done; i.doneAt = new Date().toISOString(); Logic.touch(i); await save(); render(); },
   toggleTask: async v => { Logic.markDone(data, { kind: 'task', id: v }); await save(); render(); },
   taskMenu: v => { sheetTask = v; render(); },
-  sheetClose: () => { sheetTask = null; render(); }, noop: () => {},
-  taskDone: async v => { Logic.markDone(data, { kind: 'task', id: v }); sheetTask = null; await save(); render(); },
+  sheetClose: () => { sheetTask = null; answerTask = null; render(); }, noop: () => {},
+  taskDone: async v => { const t = data.tasks.find(x => x.id === v); if (t && needsAnswer(t)) { sheetTask = v; answerTask = v; return render(); }
+    Logic.markDone(data, { kind: 'task', id: v }); sheetTask = null; await save(); render(); },
   taskUndo: async v => { const t = data.tasks.find(x => x.id === v); if (t) { t.done = false; delete t.doneAt; Logic.touch(t); } sheetTask = null; await save(); render(); },
   taskInfo: v => { infoTask = v; sheetTask = null; tab = 'taskInfo'; render(); },
   taskEdit: v => { editId = v; sheetTask = null; tab = 'tasks'; render(); document.querySelector('li.edit')?.scrollIntoView({ block: 'center' }); },
@@ -678,6 +685,8 @@ const forms = {
   visitNew: f => { (data.visits = data.visits || []).push({ id: Logic.id(), u: Date.now(), title: f.title.trim(), date: f.date || null, items: [] }); },
   visitAdd: f => { const v = (data.visits || []).find(x => x.id === f.id); if (!v) return; (v.items = v.items || []).push({ id: Logic.id(), t: f.t.trim(), kind: f.kind, done: false }); Logic.touch(v); },
   visitResult: f => { const v = (data.visits || []).find(x => x.id === f.id); if (!v) return; v.result = f.result.trim(); Logic.touch(v); },
+  taskAnswer: f => { const t = data.tasks.find(x => x.id === f.id); if (!t) return; t.answer = f.answer.trim(); delete t.answerSeen;
+    Logic.markDone(data, { kind: 'task', id: t.id }); sheetTask = null; answerTask = null; if (current?.id === t.id) current = null; },
   packAdd: f => { const t = (data.trips || []).find(x => x.id === f.id); if (!t) return; (t.packing = t.packing || []).push({ id: Logic.id(), t: f.t.trim(), done: false }); Logic.touch(t); },
   addTask: f => data.tasks.push({ u: Date.now(), id: Logic.id(), title: f.title.trim(), details: f.details?.trim() || undefined, ...monthlyFields(f), minutes: num(f.minutes), focus: !!f.focus, done: false }),
   settings: f => { data.settings = { ...data.settings, ...f }; Chat.resetContext(); },
