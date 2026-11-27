@@ -53,24 +53,36 @@ if (!test) {
   for (const s of starts) {
     const key = `${s.getFullYear()}-${String(s.getMonth() + 1).padStart(2, '0')}`, from = Math.floor(s / 1e3);
     const to = Math.min(Math.floor(new Date(s.getFullYear(), s.getMonth() + 1, 1) / 1e3) - 1, Math.floor(now / 1e3));
-    const m = { in: 0, out: 0, cats: {}, top: {}, byAcc: {} };
+    const m = { in: 0, out: 0, cats: {}, top: {}, topIn: {}, byAcc: {}, fromJars: {} };
     for (const a of accs.filter(a => a.cur === 'UAH')) {
-      let end = to;
+      let end = to; const all = [];
       while (true) { // max 500 items per call: page backwards by time
         if (!first) await sleep(61e3); first = false;
         const tx = await mono(`/personal/statement/${a.id}/${from}/${end}`);
-        for (const t of tx) {
-          const v = uah(t.amount), c = cat(t);
-          if (v >= 0) { m.in += v; continue; }
-          m.out -= v; m.cats[c] = (m.cats[c] || 0) - v; m.byAcc[a.last4 || a.type] = (m.byAcc[a.last4 || a.type] || 0) - v;
-          const d = ((t.description || '?') + (t.counterName ? ' → ' + t.counterName : '')).replace(/\s+/g, ' ').trim().slice(0, 60); m.top[d] = (m.top[d] || 0) - v;
-        }
-        console.log(key, a.type, tx.length, 'tx');
+        all.push(...tx); console.log(key, a.type, tx.length, 'tx');
         if (tx.length < 500) break;
         end = Math.min(...tx.map(t => t.time)) - 1;
       }
+      all.sort((x, y) => x.time - y.time);
+      let follow = null; // jar withdrawal → the payments right after it (≤3 h, up to the withdrawn sum) are attributed to that jar
+      for (const t of all) {
+        const v = uah(t.amount), c = cat(t), d = ((t.description || '?') + (t.counterName ? ' → ' + t.counterName : '')).replace(/\s+/g, ' ').trim().slice(0, 60);
+        if (v >= 0) {
+          m.in += v; m.topIn[d] = (m.topIn[d] || 0) + v;
+          const j = /«([^»]+)»/.exec(t.description || '');
+          follow = j ? { jar: j[1], left: v * 1.05, until: t.time + 3 * 3600 } : follow;
+          continue;
+        }
+        m.out -= v; m.cats[c] = (m.cats[c] || 0) - v; m.byAcc[a.last4 || a.type] = (m.byAcc[a.last4 || a.type] || 0) - v;
+        m.top[d] = (m.top[d] || 0) - v;
+        if (follow && ['transfers', 'kids_edu', 'other', 'travel'].includes(c) && t.time <= follow.until && follow.left > 0) {
+          const f = m.fromJars[follow.jar] = m.fromJars[follow.jar] || { sum: 0, pay: [] };
+          f.sum -= v; f.pay.push([new Date(t.time * 1e3).toISOString().slice(0, 10), d, -v]); follow.left += v;
+        } else if (follow && t.time > follow.until) follow = null;
+      }
     }
     m.top = Object.entries(m.top).sort((x, y) => y[1] - x[1]).slice(0, 25);
+    m.topIn = Object.entries(m.topIn).sort((x, y) => y[1] - x[1]).slice(0, 10);
     m.partial = to < Math.floor(new Date(s.getFullYear(), s.getMonth() + 1, 1) / 1e3) - 1;
     months[key] = m;
   }
