@@ -32,7 +32,10 @@ const MCC = [
   ['digital', [4899, 5734, 5735, 5815, 5816, 5817, 5818, 7372, 7994]], ['utilities_phone', [4814, 4816, 4900]],
   ['travel', [3000, 4411, 4511, 4722, 7011, 7012, 7032, 7033]], ['cash', [6010, 6011]], ['transfers', [4829, 6012, 6050, 6051, 6211, 6536, 6537, 6538, 6540]],
 ];
-const cat = m => (m >= 3000 && m <= 3999) ? 'travel' : (MCC.find(([, l]) => l.includes(m)) || ['other'])[0];
+const mccCat = m => (m >= 3000 && m <= 3999) ? 'travel' : (MCC.find(([, l]) => l.includes(m)) || ['other'])[0];
+// Description rules first (bank-specific wording): installments, jar top-ups, internal moves, taxes.
+const DESC = [['installments', /^щомісячний платіж|^платіж (за|по) (покупці|частин)/i], ['jars', /^поповнення «/i], ['internal', /міграції рахунк|^з (чорної|білої|єврової|доларової) картки|^на (чорну|білу) картку/i], ['taxes', /^гук у /i]];
+const cat = t => (DESC.find(([, r]) => r.test(t.description || '')) || [mccCat(t.mcc)])[0];
 
 const info = await mono('/personal/client-info');
 const accs = (info.accounts || []).map(a => ({ id: a.id, last4: (a.maskedPan?.[0] || '').slice(-4), type: a.type, cur: CUR[a.currencyCode] || String(a.currencyCode),
@@ -57,7 +60,7 @@ if (!test) {
         if (!first) await sleep(61e3); first = false;
         const tx = await mono(`/personal/statement/${a.id}/${from}/${end}`);
         for (const t of tx) {
-          const v = uah(t.amount), c = cat(t.mcc);
+          const v = uah(t.amount), c = cat(t);
           if (v >= 0) { m.in += v; continue; }
           m.out -= v; m.cats[c] = (m.cats[c] || 0) - v; m.byAcc[a.last4 || a.type] = (m.byAcc[a.last4 || a.type] || 0) - v;
           const d = (t.description || '?').replace(/\s+/g, ' ').trim().slice(0, 40); m.top[d] = (m.top[d] || 0) - v;
