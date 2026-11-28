@@ -111,7 +111,7 @@ function navTabs() { if (navCache) return navCache;
 }
 const shell = body => {
   countScreen(); const cur = tab === 'role' ? 'role:' + roleId : tab, nav = navTabs();
-  $app.innerHTML = `<div class="page">${body}</div>${sheetTask ? taskSheet() : ''}<nav>${nav.map(([k, t]) =>
+  $app.innerHTML = `<div class="page">${body}</div>${sheetTask ? taskSheet() : askRoutine ? routineAskSheet() : ''}<nav>${nav.map(([k, t]) =>
     `<button data-act="${k.startsWith('role:') ? 'role' : 'tab'}" data-v="${k.replace('role:', '')}" class="${k === cur || (k === 'menu' && UNDER_MENU.includes(tab) && !nav.some(([x]) => x === cur)) ? 'on' : ''}">${t}</button>`).join('')}</nav>`;
 };
 
@@ -254,9 +254,19 @@ const taskMeta = t => [t.due && ddm(t.due), t.monthly && `${t.months === 3 ? 'щ
 // Tasks that ask to find something out: «Готово» asks for the answer (saved as t.answer for the agents' review).
 const needsAnswer = t => t.ask || /^\s*(уточнити|дізнатися|дізнатись|з[’'ʼ]ясувати|спитати|запитати|перевірити,? чи)/i.test(t.title);
 let answerTask = null;
+// Habits with `ask: "<prompt>"` (e.g. whom did you write to?) ask for a short answer when marked done; answers go to the
+// `answers` collection {id, u, ref, day, text} for the agents (e.g. to rotate people). Recent answers are shown as a hint.
+let askRoutine = null;
+function routineAskSheet() { const { id, day } = askRoutine, r = data.routines.find(x => x.id === id); if (!r) { askRoutine = null; return ''; }
+  const last = (data.answers || []).filter(a => a.ref === id).sort((a, b) => a.day < b.day ? 1 : -1).slice(0, 5);
+  return `<div class="sheetbg" data-act="sheetClose"><div class="sheetbox" data-act="noop"><p class="clamp"><b>${esc(r.title)}</b></p>
+    ${last.length ? `<p class="muted">Останні: ${last.map(a => `${esc(a.text)} (${ddm(a.day)})`).join(', ')}</p>` : ''}
+    <form data-form="routineAnswer"><input type="hidden" name="id" value="${id}"><input type="hidden" name="day" value="${day}">
+    <textarea name="text" rows="2" placeholder="${esc(r.ask)}" required></textarea><button class="primary">✓ Готово</button></form>
+    <button data-act="sheetClose">Скасувати</button></div></div>`; }
 function taskSheet() { const t = data.tasks.find(x => x.id === sheetTask); if (!t) { sheetTask = null; return ''; }
   if (answerTask === t.id) return `<div class="sheetbg" data-act="sheetClose"><div class="sheetbox" data-act="noop"><p class="clamp"><b>${esc(t.title)}</b></p>
-    <form data-form="taskAnswer"><input type="hidden" name="id" value="${t.id}"><textarea name="answer" rows="4" placeholder="Що дізнався? Помічник прочитає і зробить наступний крок" required>${esc(t.answer || '')}</textarea>
+    <form data-form="taskAnswer"><input type="hidden" name="id" value="${t.id}"><textarea name="answer" rows="4" placeholder="${esc(typeof t.ask === 'string' ? t.ask : 'Що дізнався? Помічник прочитає і зробить наступний крок')}" required>${esc(t.answer || '')}</textarea>
     <button class="primary">✓ Готово</button></form><button data-act="sheetClose">Скасувати</button></div></div>`;
   return `<div class="sheetbg" data-act="sheetClose"><div class="sheetbox" data-act="noop"><p class="clamp"><b>${esc(t.title)}</b></p>${t.due ? `<p class="muted">до ${ddm(t.due)}</p>` : ''}
     ${t.done ? `<button class="primary" data-act="taskUndo" data-v="${t.id}">↩ Повернути в справи</button>` : `<button class="primary" data-act="taskDone" data-v="${t.id}">✓ Відмітити зробленим</button>`}
@@ -312,6 +322,7 @@ function routineFormHtml(r) { const v = k => r?.[k] != null ? `value="${r[k]}"` 
       <small class="muted">Дні не відмічені = будь-який день</small>
       <input name="perWeek" type="number" min="1" max="6" placeholder="Або N разів на тиждень (будь-які дні)" ${v('perWeek')}>
       <input name="every" type="number" min="2" max="365" placeholder="Або раз на N днів (нагадує щодня, поки не зробиш)" ${v('every')}>
+      <input name="ask" placeholder="Питати при «Готово» (напр. Кому написав?), необов'язково" ${r?.ask ? `value="${esc(r.ask)}"` : ''}>
       <button class="primary">${r ? 'Зберегти' : 'Додати'}</button>${r ? '<button type="button" data-act="edit" data-v="">Скасувати</button>' : ''}</form>`; }
 
 // ---------- Plans: long-term goals (exam prep), stages + progress vs targets ----------
@@ -606,7 +617,7 @@ const acts = {
   monthToggle: () => { showMonth = !showMonth; render(); },
   tab: v => { tab = v; render(); },
   other: () => { skipped.push(current.id); next(); },
-  done: async () => { if (current.kind === 'task' && needsAnswer(current.item)) return acts.taskDone(current.id); Logic.markDone(data, current); current = null; await save(); next(); },
+  done: async () => { if (current.kind === 'task' && needsAnswer(current.item)) return acts.taskDone(current.id); if (current.kind === 'routine' && typeof current.item.ask === 'string') return acts.toggleRoutine(Logic.localDay() + '|' + current.id); Logic.markDone(data, current); current = null; await save(); next(); },
   start: () => { const c = current; startTimer(c.title, c.minutes, c.kind, c.id); },
   timerDone: v => { clearInterval(tick); finishTimer(v); },
   timerStop: async v => { data.timers = timers().filter(x => x.id !== v); await save(); render(); },
@@ -631,7 +642,7 @@ const acts = {
   toggleShop: async v => { const i = data.shopping.find(x => x.id === v); i.done = !i.done; i.doneAt = new Date().toISOString(); Logic.touch(i); await save(); render(); },
   toggleTask: async v => { Logic.markDone(data, { kind: 'task', id: v }); await save(); render(); },
   taskMenu: v => { sheetTask = v; render(); },
-  sheetClose: () => { sheetTask = null; answerTask = null; render(); }, noop: () => {},
+  sheetClose: () => { sheetTask = null; answerTask = null; askRoutine = null; render(); }, noop: () => {},
   taskDone: async v => { const t = data.tasks.find(x => x.id === v); if (t && needsAnswer(t)) { sheetTask = v; answerTask = v; return render(); }
     Logic.markDone(data, { kind: 'task', id: v }); sheetTask = null; await save(); render(); },
   taskUndo: async v => { const t = data.tasks.find(x => x.id === v); if (t) { t.done = false; delete t.doneAt; Logic.touch(t); } sheetTask = null; await save(); render(); },
@@ -641,7 +652,9 @@ const acts = {
   hideNote: v => { try { const k = 'hidden-' + Logic.localDay(); localStorage.setItem(k, JSON.stringify([...hiddenNotes(), v])); } catch {} render(); },
   dismiss: async v => { Logic.remove(data, 'inbox', v); await save(); render(); },
   setOff: async v => { const [day, id, st] = v.split('|'); Logic.setOff(data, day, id, Logic.offOn(data, day, id) === st ? '' : st); await save(); render(); },
-  toggleRoutine: async v => { const [day, id] = v.split('|'); Logic.setRoutine(data, day, id, !Logic.doneSet(data, day).has(id)); await save(); render(); },
+  toggleRoutine: async v => { const [day, id] = v.split('|'), r = data.routines.find(x => x.id === id);
+    if (typeof r?.ask === 'string' && !Logic.doneSet(data, day).has(id)) { askRoutine = { id, day }; return render(); }
+    Logic.setRoutine(data, day, id, !Logic.doneSet(data, day).has(id)); await save(); render(); },
   toggleTaskDone: async v => {
     const [id, day] = v.split('|'), t = data.tasks.find(x => x.id === id); if (!t) return;
     t.done = !t.done; t.doneAt = t.done ? (day === Logic.localDay() ? new Date().toISOString() : day + 'T12:00:00.000Z') : undefined; Logic.touch(t); await save(); render();
@@ -676,6 +689,7 @@ function routineFrom(f, old) {
   for (const k of ['from', 'to', 'minutes', 'goal', 'perWeek', 'every']) if (num(f[k]) != null) r[k] = num(f[k]);
   if (days.length && days.length < 7) r.days = days;
   if (+f.prio !== 2) r.prio = +f.prio; if (+f.prio !== 1) delete r.fixed;
+  if (f.ask?.trim()) r.ask = f.ask.trim(); else delete r.ask;
   return r;
 }
 const forms = {
@@ -685,6 +699,8 @@ const forms = {
   visitNew: f => { (data.visits = data.visits || []).push({ id: Logic.id(), u: Date.now(), title: f.title.trim(), date: f.date || null, items: [] }); },
   visitAdd: f => { const v = (data.visits || []).find(x => x.id === f.id); if (!v) return; (v.items = v.items || []).push({ id: Logic.id(), t: f.t.trim(), kind: f.kind, done: false }); Logic.touch(v); },
   visitResult: f => { const v = (data.visits || []).find(x => x.id === f.id); if (!v) return; v.result = f.result.trim(); Logic.touch(v); },
+  routineAnswer: f => { (data.answers = data.answers || []).push({ id: Logic.id(), u: Date.now(), ref: f.id, day: f.day, text: f.text.trim() });
+    Logic.setRoutine(data, f.day, f.id, true); askRoutine = null; if (current?.id === f.id) current = null; },
   taskAnswer: f => { const t = data.tasks.find(x => x.id === f.id); if (!t) return; t.answer = f.answer.trim(); delete t.answerSeen;
     Logic.markDone(data, { kind: 'task', id: t.id }); sheetTask = null; answerTask = null; if (current?.id === t.id) current = null; },
   packAdd: f => { const t = (data.trips || []).find(x => x.id === f.id); if (!t) return; (t.packing = t.packing || []).push({ id: Logic.id(), t: f.t.trim(), done: false }); Logic.touch(t); },
